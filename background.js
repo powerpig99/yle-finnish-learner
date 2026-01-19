@@ -92,8 +92,41 @@ chrome.runtime.onMessage.addListener((request, _sender, sendResponse) => {
     return true;
   }
 
+  if (request.action === 'downloadBlob') {
+    // Handle download via chrome.downloads API to avoid page focus issues
+    const { dataUrl, filename } = request.data;
+    downloadBlobViaAPI(dataUrl, filename)
+      .then(() => sendResponse({ success: true }))
+      .catch(error => sendResponse({ success: false, error: error.message }));
+    return true;
+  }
+
   return false;
 });
+
+/**
+ * Download a blob via chrome.downloads API
+ * This runs in the background context, avoiding any page focus events
+ * @param {string} dataUrl - Data URL or Blob URL of the file
+ * @param {string} filename - Suggested filename for the download
+ * @returns {Promise<void>}
+ */
+async function downloadBlobViaAPI(dataUrl, filename) {
+  return new Promise((resolve, reject) => {
+    chrome.downloads.download({
+      url: dataUrl,
+      filename: filename,
+      saveAs: false // Save directly without prompt to avoid focus issues
+    }, (downloadId) => {
+      if (chrome.runtime.lastError) {
+        reject(new Error(chrome.runtime.lastError.message));
+      } else {
+        console.info('YleDualSubExtension: Download started, ID:', downloadId);
+        resolve();
+      }
+    });
+  });
+}
 
 /**
  * Clear all word translations from IndexedDB cache

@@ -1,0 +1,398 @@
+/**
+ * YouTube Platform Adapter
+ *
+ * Platform-specific implementation for YouTube (youtube.com)
+ * Handles DOM selectors, control bar integration, and subtitle detection.
+ */
+
+const YouTubeAdapter = {
+  name: 'youtube',
+  sourceLanguage: 'en', // Default to English
+
+  // DOM Selectors
+  SELECTORS: {
+    video: 'video.html5-main-video',
+    player: '#movie_player',
+    playerContainer: '#player-container',
+    leftControls: '.ytp-left-controls',
+    rightControls: '.ytp-right-controls',
+    bottomControls: '.ytp-chrome-bottom',
+    captionWindow: '.ytp-caption-window-container',
+    captionSegment: '.ytp-caption-segment'
+  },
+
+  _captionTracks: [],
+  _initialized: false,
+  _lastUrl: null,
+
+  /**
+   * Get mount configuration for the unified control panel
+   * @returns {Object}
+   */
+  getControlPanelMountConfig() {
+    return {
+      selector: '.ytp-left-controls',
+      insertMethod: 'append',
+      style: 'integrated',
+      hideOnInactive: false // YouTube handles this natively
+    };
+  },
+
+  /**
+   * Get keyboard configuration for the unified control panel
+   * @returns {Object}
+   */
+  getKeyboardConfig() {
+    return {
+      useCapture: true,      // YouTube needs capture phase to intercept
+      interceptSpace: true,  // Take over space for play/pause
+      interceptBrackets: true
+    };
+  },
+
+  /**
+   * Check if on YouTube
+   */
+  isMatch() {
+    const hostname = window.location.hostname;
+    return hostname === 'www.youtube.com' || hostname === 'youtube.com';
+  },
+
+  /**
+   * Check if on a video watch page (includes regular videos and Shorts)
+   */
+  isVideoPage() {
+    const pathname = window.location.pathname;
+    return pathname === '/watch' || pathname.startsWith('/shorts/');
+  },
+
+  /**
+   * Check if on a Shorts page
+   */
+  isShortsPage() {
+    return window.location.pathname.startsWith('/shorts/');
+  },
+
+  /**
+   * Get video element
+   */
+  getVideoElement() {
+    return document.querySelector(this.SELECTORS.video) || document.querySelector('video');
+  },
+
+  /**
+   * Get player container
+   */
+  getPlayerContainer() {
+    return document.querySelector(this.SELECTORS.player);
+  },
+
+  /**
+   * Wait for and get control bar container
+   * Returns the left controls area which has more room for our UI
+   */
+  async getControlBarContainer() {
+    for (let i = 0; i < 20; i++) {
+      // Try left controls first (more room)
+      const leftControls = document.querySelector(this.SELECTORS.leftControls);
+      if (leftControls) {
+        return leftControls;
+      }
+      await new Promise(r => setTimeout(r, 250));
+    }
+    return null;
+  },
+
+  /**
+   * Get video title (handles both regular videos and Shorts)
+   */
+  async getVideoTitle() {
+    // For Shorts, extract title from page title (format: "Title | #Shorts - YouTube")
+    if (this.isShortsPage()) {
+      const pageTitle = document.title;
+      // Remove " - YouTube" suffix and optionally " | #Shorts"
+      let title = pageTitle.replace(/ - YouTube$/, '').replace(/\s*\|\s*#Shorts$/, '').trim();
+      if (title) return title;
+      // Fallback to video ID
+      return this.getVideoId() || 'Unknown Short';
+    }
+
+    // For regular videos, try DOM selectors
+    for (let i = 0; i < 10; i++) {
+      const title = document.querySelector('h1.ytd-watch-metadata yt-formatted-string') ||
+                    document.querySelector('h1.ytd-video-primary-info-renderer') ||
+                    document.querySelector('#title h1');
+      if (title?.textContent?.trim()) {
+        return title.textContent.trim();
+      }
+      await new Promise(r => setTimeout(r, 200));
+    }
+    return new URLSearchParams(window.location.search).get('v') || 'Unknown';
+  },
+
+  /**
+   * Get video ID (handles both regular videos and Shorts)
+   */
+  getVideoId() {
+    // For Shorts, the ID is in the path: /shorts/VIDEO_ID
+    if (this.isShortsPage()) {
+      const pathParts = window.location.pathname.split('/');
+      return pathParts[2] || null;
+    }
+    // For regular videos, the ID is in the query string: ?v=VIDEO_ID
+    return new URLSearchParams(window.location.search).get('v');
+  },
+
+  /**
+   * Setup navigation handler for SPA
+   */
+  setupNavigationHandler(callback) {
+    this._lastUrl = location.href;
+
+    document.addEventListener('yt-navigate-finish', () => callback());
+
+    new MutationObserver(() => {
+      if (location.href !== this._lastUrl) {
+        this._lastUrl = location.href;
+        callback();
+      }
+    }).observe(document.body, { childList: true, subtree: true });
+  },
+
+  /**
+   * Set caption tracks
+   */
+  setCaptionTracks(tracks) {
+    this._captionTracks = tracks;
+  },
+
+  /**
+   * Get caption tracks
+   */
+  getCaptionTracks() {
+    return this._captionTracks;
+  },
+
+  /**
+   * Find track by language
+   */
+  findCaptionTrack(langCode) {
+    const manual = this._captionTracks.find(t => t.languageCode === langCode && !t.isAutoGenerated);
+    return manual || this._captionTracks.find(t => t.languageCode === langCode);
+  },
+
+  /**
+   * Focus player
+   */
+  focusPlayer() {
+    const player = this.getPlayerContainer();
+    if (player) player.focus();
+  },
+
+  /**
+   * Get control bar HTML with language selector
+   */
+  getControlBarHTML(options = {}) {
+    const {
+      dualSubEnabled = false,
+      autoPauseEnabled = false,
+      sourceLanguage = 'en',
+      availableLanguages = []
+    } = options;
+
+    // Build language options
+    const defaultLangs = [
+      { code: 'en', name: 'English' },
+      { code: 'fi', name: 'Finnish' },
+      { code: 'es', name: 'Spanish' },
+      { code: 'de', name: 'German' },
+      { code: 'fr', name: 'French' },
+      { code: 'ja', name: 'Japanese' },
+      { code: 'ko', name: 'Korean' },
+      { code: 'zh', name: 'Chinese' }
+    ];
+
+    // Merge with available languages from video
+    const langSet = new Map(defaultLangs.map(l => [l.code, l.name]));
+    availableLanguages.forEach(l => {
+      if (!langSet.has(l.code)) {
+        langSet.set(l.code, l.name);
+      }
+    });
+
+    const langOptions = Array.from(langSet.entries())
+      .map(([code, name]) => `<option value="${code}" ${code === sourceLanguage ? 'selected' : ''}>${name}</option>`)
+      .join('');
+
+    return `
+      <div class="dual-sub-extension-section dual-sub-youtube ytp-button" style="
+        display: flex !important;
+        align-items: center;
+        gap: 6px;
+        margin-left: 12px;
+        padding-left: 12px;
+        border-left: 1px solid rgba(255,255,255,0.2);
+        height: 100%;
+        flex-shrink: 0;
+      ">
+        <span style="color: #fff; font-size: 11px; font-family: Roboto, Arial, sans-serif; white-space: nowrap;">Dual Sub:</span>
+        <input id="dual-sub-switch" type="checkbox" ${dualSubEnabled ? 'checked' : ''} style="
+          width: 14px; height: 14px; cursor: pointer; margin: 0; accent-color: #3ea6ff;
+        " title="Enable dual subtitles">
+
+        <select id="dual-sub-source-lang" style="
+          background: rgba(0,0,0,0.6);
+          color: #fff;
+          border: 1px solid rgba(255,255,255,0.3);
+          border-radius: 3px;
+          font-size: 11px;
+          padding: 2px 6px;
+          cursor: pointer;
+          min-width: 70px;
+        " title="Source language to translate from">
+          ${langOptions}
+        </select>
+
+        <button id="yle-dual-sub-rewind-button" class="ytp-button" style="
+          width: 32px; height: 32px; padding: 0; opacity: 0.9; background: none; border: none;
+        " title="Previous subtitle (,)">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="white">
+            <path d="M6 6h2v12H6V6zm3.5 6l8.5 6V6l-8.5 6z"/>
+          </svg>
+        </button>
+
+        <button id="yle-dual-sub-forward-button" class="ytp-button" style="
+          width: 32px; height: 32px; padding: 0; opacity: 0.9; background: none; border: none;
+        " title="Next subtitle (.)">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="white">
+            <path d="M6 18l8.5-6L6 6v12zm2-12v12l6.5-6L8 6zm8 0v12h2V6h-2z"/>
+          </svg>
+        </button>
+
+        <span style="color: #fff; font-size: 10px; opacity: 0.7; white-space: nowrap; margin-left: 4px;">AP:</span>
+        <input id="auto-pause-switch" type="checkbox" ${autoPauseEnabled ? 'checked' : ''} style="
+          width: 13px; height: 13px; cursor: pointer; margin: 0; accent-color: #3ea6ff;
+        " title="Auto-pause after each subtitle (P)">
+
+        <button id="dual-sub-settings-button" class="ytp-button" style="
+          width: 28px; height: 28px; padding: 0; opacity: 0.7; background: none; border: none; margin-left: 4px;
+        " title="Open settings">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="white">
+            <path d="M19.14 12.94c.04-.31.06-.63.06-.94 0-.31-.02-.63-.06-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.04.31-.06.63-.06.94s.02.63.06.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/>
+          </svg>
+        </button>
+      </div>
+    `;
+  },
+
+  /**
+   * Create subtitle overlay
+   */
+  createSubtitleOverlay() {
+    // Remove existing overlay
+    const existing = document.getElementById('dual-sub-overlay');
+    if (existing) existing.remove();
+
+    const overlay = document.createElement('div');
+    overlay.id = 'dual-sub-overlay';
+    overlay.style.cssText = `
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: flex-end;
+      pointer-events: none;
+      z-index: 2147483646;
+      padding: 0 40px 17px 40px;
+      container-type: inline-size;
+    `;
+    console.info('DualSubExtension: Created subtitle overlay');
+    return overlay;
+  },
+
+  /**
+   * Create subtitle wrapper
+   */
+  createSubtitleDisplayWrapper() {
+    const wrapper = document.createElement('div');
+    wrapper.id = 'displayed-subtitles-wrapper';
+    wrapper.style.cssText = `
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      text-align: center;
+      pointer-events: auto;
+    `;
+    return wrapper;
+  },
+
+  /**
+   * Position overlay in player
+   */
+  positionSubtitleOverlay(overlay) {
+    const player = this.getPlayerContainer();
+    if (player) {
+      player.style.position = 'relative';
+      player.appendChild(overlay);
+    }
+  },
+
+  /**
+   * Hide native captions
+   */
+  hideNativeCaptions() {
+    // Try multiple selectors for caption containers
+    const selectors = [
+      this.SELECTORS.captionWindow,
+      '.ytp-caption-window-bottom',
+      '.caption-window',
+      '.ytp-caption-window-rollup'
+    ];
+
+    selectors.forEach(selector => {
+      document.querySelectorAll(selector).forEach(el => {
+        el.style.display = 'none';
+        el.style.visibility = 'hidden';
+      });
+    });
+  },
+
+  /**
+   * Show native captions
+   */
+  showNativeCaptions() {
+    const selectors = [
+      this.SELECTORS.captionWindow,
+      '.ytp-caption-window-bottom',
+      '.caption-window',
+      '.ytp-caption-window-rollup'
+    ];
+
+    selectors.forEach(selector => {
+      document.querySelectorAll(selector).forEach(el => {
+        el.style.display = '';
+        el.style.visibility = '';
+      });
+    });
+  },
+
+  /**
+   * Get current caption text from YouTube's native captions
+   */
+  getCurrentCaptionText() {
+    const segments = document.querySelectorAll(this.SELECTORS.captionSegment);
+    if (segments.length === 0) {
+      const captionWindow = document.querySelector('.caption-window');
+      return captionWindow?.textContent?.trim() || '';
+    }
+    return Array.from(segments).map(s => s.textContent).join(' ').trim();
+  }
+};
+
+if (typeof window !== 'undefined') {
+  window.YouTubeAdapter = YouTubeAdapter;
+}

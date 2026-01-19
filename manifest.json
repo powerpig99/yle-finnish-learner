@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "Finnish Language Learning for YLE Areena",
-  "version": "3.1.0",
-  "description": "Learn Finnish on YLE Areena with dual subtitles, popup dictionary, auto-pause, and playback speed control.",
+  "name": "Language Learning Subtitles",
+  "version": "4.0.0",
+  "description": "Learn languages with dual subtitles, popup dictionary, and playback controls on YLE, YouTube, and HTML5 videos.",
   "icons": {
     "16": "icons/icon.png",
     "48": "icons/icon.png",
@@ -15,7 +15,78 @@
     {
       "matches": ["https://areena.yle.fi/*"],
       "run_at": "document_end",
-      "js": ["database.js", "utils.js", "contentscript.js", "inject.js"],
+      "js": [
+        "lib/lamejs.min.js",
+        "platforms/platform-base.js",
+        "platforms/yle/yle-adapter.js",
+        "controls/control-icons.js",
+        "controls/control-actions.js",
+        "controls/control-keyboard.js",
+        "controls/audio-filters.js",
+        "controls/audio-encoder.js",
+        "controls/audio-recorder.js",
+        "controls/screen-recorder.js",
+        "controls/audio-download-ui.js",
+        "controls/control-panel.js",
+        "controls/control-integration.js",
+        "database.js",
+        "utils.js",
+        "contentscript.js",
+        "inject.js"
+      ],
+      "css": ["styles.css"]
+    },
+    {
+      "matches": [
+        "https://www.youtube.com/*",
+        "https://youtube.com/*"
+      ],
+      "run_at": "document_end",
+      "js": [
+        "lib/lamejs.min.js",
+        "platforms/platform-base.js",
+        "platforms/youtube/youtube-adapter.js",
+        "controls/control-icons.js",
+        "controls/control-actions.js",
+        "controls/control-keyboard.js",
+        "controls/audio-filters.js",
+        "controls/audio-encoder.js",
+        "controls/audio-recorder.js",
+        "controls/audio-download-ui.js",
+        "controls/control-panel.js",
+        "controls/control-integration.js",
+        "database.js",
+        "utils.js",
+        "contentscript.js",
+        "inject.js"
+      ],
+      "css": ["styles.css"]
+    },
+    {
+      "matches": ["<all_urls>"],
+      "exclude_matches": [
+        "https://areena.yle.fi/*",
+        "https://www.youtube.com/*",
+        "https://youtube.com/*"
+      ],
+      "run_at": "document_end",
+      "js": [
+        "lib/lamejs.min.js",
+        "platforms/platform-base.js",
+        "platforms/html5/html5-adapter.js",
+        "controls/control-icons.js",
+        "controls/control-actions.js",
+        "controls/control-keyboard.js",
+        "controls/audio-filters.js",
+        "controls/audio-encoder.js",
+        "controls/audio-recorder.js",
+        "controls/audio-download-ui.js",
+        "controls/control-panel.js",
+        "controls/control-integration.js",
+        "database.js",
+        "utils.js",
+        "contentscript.js"
+      ],
       "css": ["styles.css"]
     }
   ],
@@ -25,17 +96,22 @@
     "https://translate.googleapis.com/*",
     "https://api.anthropic.com/*",
     "https://generativelanguage.googleapis.com/*",
-    "https://api.x.ai/*"
+    "https://api.x.ai/*",
+    "https://www.youtube.com/*"
   ],
-  "permissions": ["storage"],
+  "permissions": ["storage", "downloads"],
   "web_accessible_resources": [
     {
-      "resources": ["injected.js"],
+      "resources": ["platforms/yle/yle-injected.js"],
       "matches": ["https://areena.yle.fi/*"]
+    },
+    {
+      "resources": ["platforms/youtube/youtube-injected.js"],
+      "matches": ["https://www.youtube.com/*", "https://youtube.com/*"]
     }
   ],
   "action": {
-    "default_title": "Finnish Language Learning for YLE",
+    "default_title": "Language Learning Subtitles",
     "default_popup": "popup.html",
     "default_icon": {
       "16": "icons/icon.png",

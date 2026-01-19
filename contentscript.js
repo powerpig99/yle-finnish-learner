@@ -1,4 +1,35 @@
 // ==================================
+// SECTION 0: PLATFORM DETECTION
+// ==================================
+
+/* global PlatformDetector, YLEAdapter, YouTubeAdapter, HTML5Adapter */
+
+/**
+ * Detect and get the current platform adapter
+ * @returns {Object} The platform adapter for the current site
+ */
+function getCurrentPlatformAdapter() {
+  const platform = PlatformDetector.detect();
+
+  switch (platform.name) {
+    case 'yle':
+      return typeof YLEAdapter !== 'undefined' ? YLEAdapter : null;
+    case 'youtube':
+      return typeof YouTubeAdapter !== 'undefined' ? YouTubeAdapter : null;
+    case 'html5':
+      return typeof HTML5Adapter !== 'undefined' ? HTML5Adapter : null;
+    default:
+      return null;
+  }
+}
+
+// Get the current platform adapter
+const currentPlatform = PlatformDetector ? PlatformDetector.detect() : { name: 'yle' };
+const platformAdapter = getCurrentPlatformAdapter();
+
+console.info(`DualSubExtension: Platform detected: ${currentPlatform.name}`);
+
+// ==================================
 // SECTION 1: STATE & INITIALIZATION
 // ==================================
 
@@ -140,14 +171,16 @@ let lastVideoElement = null;
 // Subtitle font size setting (small, medium, large, xlarge)
 let subtitleFontSize = "medium";
 
-// Font size mappings (Finnish text / Translated text)
-const FONT_SIZE_MAP = {
-  small: { main: 24, translated: 20 },
-  medium: { main: 32, translated: 28 },
-  large: { main: 40, translated: 36 },
-  xlarge: { main: 48, translated: 42 },
-  xxlarge: { main: 56, translated: 50 },
-  huge: { main: 64, translated: 56 }
+// Font size scale factors using CSS cqw units (container query width percentage)
+// YouTube native subtitles use approximately 2.2% of player width
+// Using CSS clamp() with container queries for automatic scaling based on player size
+const FONT_SIZE_VW_MAP = {
+  small: { main: '1.8cqw', translated: '1.4cqw', minMain: 12, maxMain: 50, minTrans: 10, maxTrans: 38 },
+  medium: { main: '2.2cqw', translated: '1.7cqw', minMain: 14, maxMain: 60, minTrans: 11, maxTrans: 46 },
+  large: { main: '2.6cqw', translated: '2.0cqw', minMain: 16, maxMain: 72, minTrans: 12, maxTrans: 55 },
+  xlarge: { main: '3.0cqw', translated: '2.3cqw', minMain: 18, maxMain: 84, minTrans: 14, maxTrans: 64 },
+  xxlarge: { main: '3.4cqw', translated: '2.6cqw', minMain: 20, maxMain: 96, minTrans: 16, maxTrans: 72 },
+  huge: { main: '4.0cqw', translated: '3.0cqw', minMain: 24, maxMain: 120, minTrans: 18, maxTrans: 90 }
 };
 
 // Load saved subtitle font size from chrome storage
@@ -161,6 +194,7 @@ chrome.storage.sync.get(['subtitleFontSize'], (result) => {
 
 /**
  * Apply the current subtitle font size via CSS injection
+ * Uses CSS clamp() with cqw units for automatic responsive scaling based on player size
  */
 function applySubtitleFontSize() {
   const styleId = 'yle-dual-sub-fontsize-style';
@@ -172,14 +206,17 @@ function applySubtitleFontSize() {
     document.head.appendChild(styleEl);
   }
 
-  const sizes = FONT_SIZE_MAP[subtitleFontSize] || FONT_SIZE_MAP.medium;
+  const sizes = FONT_SIZE_VW_MAP[subtitleFontSize] || FONT_SIZE_VW_MAP.medium;
 
+  // Use CSS clamp() for automatic responsive scaling
+  // clamp(min, preferred, max) - preferred uses cqw units which scale with container (player) width
   styleEl.textContent = `
     #displayed-subtitles-wrapper span {
-      font-size: ${sizes.main}px !important;
+      font-size: clamp(${sizes.minMain}px, ${sizes.main}, ${sizes.maxMain}px) !important;
     }
-    #displayed-subtitles-wrapper .translated-text-span {
-      font-size: ${sizes.translated}px !important;
+    #displayed-subtitles-wrapper .translated-text-span,
+    #displayed-subtitles-wrapper .dual-sub-translated {
+      font-size: clamp(${sizes.minTrans}px, ${sizes.translated}, ${sizes.maxTrans}px) !important;
     }
   `;
 }
@@ -207,11 +244,98 @@ let lastSubtitleText = "";
 // Flag to temporarily disable auto-pause during subtitle skipping
 let isSkippingSubtitle = false;
 
+// Flag to temporarily disable auto-pause during subtitle repeat
+let isRepeatingSubtitle = false;
+
+// ==================================
+// UNIFIED CONTROL PANEL
+// ==================================
+
+/**
+ * Initialize the unified control panel for the current platform
+ * @returns {Promise<void>}
+ */
+// Flag to prevent concurrent initialization
+let _unifiedPanelInitializing = false;
+
+async function initializeUnifiedControlPanel() {
+  console.log('DualSubExtension: initializeUnifiedControlPanel called for platform:', currentPlatform.name);
+
+  if (typeof ControlIntegration === 'undefined') {
+    console.warn('DualSubExtension: ControlIntegration not available');
+    return;
+  }
+
+  // Check if already initialized OR currently initializing (prevent race condition)
+  const isActuallyInitialized = ControlIntegration.isInitialized();
+  if (isActuallyInitialized) {
+    console.log('DualSubExtension: ControlIntegration already initialized, skipping');
+    return;
+  }
+  // If panel was removed from DOM (e.g., YLE closed video), reset the flag
+  if (_unifiedPanelInitializing && !isActuallyInitialized) {
+    console.log('DualSubExtension: Panel was removed from DOM, resetting initialization flag');
+    _unifiedPanelInitializing = false;
+  }
+  if (_unifiedPanelInitializing) {
+    console.log('DualSubExtension: Panel currently initializing, skipping');
+    return;
+  }
+
+  // Mark as initializing to prevent concurrent calls
+  _unifiedPanelInitializing = true;
+
+  // Wait for platform adapter to be ready
+  console.log('DualSubExtension: Waiting 500ms for platform adapter...');
+  await new Promise(resolve => setTimeout(resolve, 500));
+
+  try {
+    console.log('DualSubExtension: Calling ControlIntegration.init with state:', {
+      dualSubEnabled, autoPauseEnabled, playbackSpeed
+    });
+
+    const panel = await ControlIntegration.init(currentPlatform.name, {
+      dualSubEnabled: dualSubEnabled,
+      autoPauseEnabled: autoPauseEnabled,
+      playbackSpeed: playbackSpeed,
+      sourceLanguage: currentPlatform.name === 'youtube' ? 'en' : 'fi'
+    });
+
+    if (panel) {
+      console.info('DualSubExtension: Unified control panel initialized successfully');
+
+      // Sync any already-loaded subtitles (YLE loads subtitles before panel init)
+      if (fullSubtitles.length > 0) {
+        ControlIntegration.setSubtitles(fullSubtitles);
+        console.info('DualSubExtension: Synced', fullSubtitles.length, 'pre-loaded subtitles with ControlIntegration');
+      }
+    } else {
+      console.warn('DualSubExtension: Unified control panel init returned null');
+    }
+  } catch (error) {
+    console.error('DualSubExtension: Error initializing unified control panel:', error);
+  } finally {
+    // Reset flag after initialization completes (success or failure)
+    // Note: Keep it true to prevent re-initialization, only reset on cleanup
+    // _unifiedPanelInitializing = false;
+  }
+}
+
+// ==================================
+// END UNIFIED CONTROL PANEL FLAG
+// ==================================
+
 /** @type {Array<{time: number, text: string}>}
  * Array of subtitle appearances with their video timestamps
  * Used for skip to next/previous subtitle feature
  */
 const subtitleTimestamps = [];
+
+/** @type {Array<{startTime: number, endTime: number, text: string}>}
+ * Array of full subtitle data with start/end times
+ * Used for repeat subtitle feature - accumulates like subtitleTimestamps
+ */
+const fullSubtitles = [];
 
 /** @type {Map<string, string>}
  * In-memory cache for word translations, key is normalized word, value is translation
@@ -380,16 +504,31 @@ async function handleBatchTranslation(subtitles) {
   console.info(`YleDualSubExtension: Received ${subtitles.length} total subtitles for batch translation`);
 
   // Pre-populate ALL subtitle timestamps for skip feature FIRST (before any early returns)
+  // Also accumulate full subtitles for repeat feature
   for (const sub of subtitles) {
     if (sub.startTime !== undefined) {
       const existingTimestamp = subtitleTimestamps.find(ts => Math.abs(ts.time - sub.startTime) < 0.5);
       if (!existingTimestamp) {
         subtitleTimestamps.push({ time: sub.startTime, text: sub.text });
       }
+      // Accumulate full subtitle data for repeat feature (with startTime and endTime)
+      if (sub.endTime !== undefined) {
+        const existingFullSub = fullSubtitles.find(fs => Math.abs(fs.startTime - sub.startTime) < 0.5);
+        if (!existingFullSub) {
+          fullSubtitles.push({ startTime: sub.startTime, endTime: sub.endTime, text: sub.text });
+        }
+      }
     }
   }
   subtitleTimestamps.sort((a, b) => a.time - b.time);
-  console.info(`YleDualSubExtension: Pre-populated ${subtitleTimestamps.length} subtitle timestamps for skip feature`);
+  fullSubtitles.sort((a, b) => a.startTime - b.startTime);
+  console.info(`YleDualSubExtension: Pre-populated ${subtitleTimestamps.length} timestamps and ${fullSubtitles.length} full subtitles`);
+
+  // Sync ACCUMULATED subtitles with ControlIntegration for skip/repeat functionality
+  if (typeof ControlIntegration !== 'undefined' && ControlIntegration.isInitialized()) {
+    ControlIntegration.setSubtitles(fullSubtitles);
+    console.info('YleDualSubExtension: Synced', fullSubtitles.length, 'accumulated subtitles with ControlIntegration');
+  }
 
   // Filter out subtitles that are already translated (from cache)
   const untranslatedSubtitles = subtitles.filter(sub => {
@@ -744,7 +883,21 @@ function createSubtitleSpanWithClickableWords(text, className) {
       wordSpan.addEventListener("click", handleWordClick);
       span.appendChild(wordSpan);
     } else {
-      span.appendChild(document.createTextNode(token.value));
+      // Handle line breaks - convert \n to <br> elements
+      const separatorValue = token.value;
+      if (separatorValue.includes('\n')) {
+        const parts = separatorValue.split('\n');
+        for (let i = 0; i < parts.length; i++) {
+          if (parts[i]) {
+            span.appendChild(document.createTextNode(parts[i]));
+          }
+          if (i < parts.length - 1) {
+            span.appendChild(document.createElement('br'));
+          }
+        }
+      } else {
+        span.appendChild(document.createTextNode(separatorValue));
+      }
     }
   }
 
@@ -1331,6 +1484,50 @@ document.addEventListener('click', (e) => {
     return;
   }
 
+  // Don't focus video when clicking on YLE settings buttons or menus
+  // These need to maintain focus for the menu/submenu to stay open
+  if (target.closest('[class*="SettingsButton"]') ||
+      target.closest('[class*="Settings__"]') ||
+      target.closest('[class*="TopLevelSettings"]') ||
+      target.closest('[aria-label*="Tekstitykset"]') ||
+      target.closest('[aria-label*="Asetukset"]') ||
+      target.closest('[aria-label*="Ääni"]')) {
+    return;
+  }
+
+  // Don't focus video when clicking on our extension's UI elements
+  // The synthetic click in focusVideo can trigger YLE to close the video player
+  // Check for the entire control panel and all dsc-prefixed elements
+  if (target.closest('.dsc-panel') ||
+      target.closest('.dsc-btn') ||
+      target.closest('.dsc-group') ||
+      target.closest('.dsc-audio-modal') ||
+      target.closest('#dsc-download-audio-btn') ||
+      target.closest('#dsc-yle-waiting-modal') ||
+      target.closest('#dsc-yle-recording-ui') ||
+      target.closest('.dsc-audio-progress') ||
+      target.closest('.dsc-audio-toast') ||
+      target.closest('[id^="dsc-yle-"]') ||
+      target.closest('[id^="dsc-audio-"]') ||
+      target.closest('[id^="dsc-export-"]') ||
+      target.closest('[class*="dsc-"]')) {
+    return;
+  }
+
+  // Also check if target itself has dsc- prefix (for buttons inside modals or SVG icons)
+  if (target.id && target.id.startsWith('dsc-')) {
+    return;
+  }
+
+  // Check if target or any parent has a class starting with dsc-
+  let el = target;
+  while (el && el !== document.body) {
+    if (el.className && typeof el.className === 'string' && el.className.split(' ').some(c => c.startsWith('dsc-'))) {
+      return;
+    }
+    el = el.parentElement;
+  }
+
   // Check if click was on control bar area
   const isControlBarClick = target.closest('[class*="BottomControlBar"]') ||
                             target.closest('[class*="TopControlBar"]') ||
@@ -1357,8 +1554,8 @@ document.addEventListener('click', (e) => {
  * @param {string} newSubtitleText - The new subtitle text
  */
 function checkAndAutoPause(newSubtitleText) {
-  // Only proceed if auto-pause is enabled and we're not currently skipping
-  if (!autoPauseEnabled || isSkippingSubtitle) {
+  // Only proceed if auto-pause is enabled and we're not currently skipping or repeating
+  if (!autoPauseEnabled || isSkippingSubtitle || isRepeatingSubtitle) {
     return;
   }
 
@@ -1482,58 +1679,62 @@ function addContentToDisplayedSubtitlesWrapper(
   }
 
   // Create Finnish span with clickable words for popup dictionary
+  // ALWAYS shown so users can click words to look up translations (like YouTube)
   const finnishSpan = createSubtitleSpanWithClickableWords(finnishText, spanClassName);
-  const translationKey = toTranslationKey(finnishText);
-  let targetLanguageText =
-    sharedTranslationMap.get(translationKey) ||
-    sharedTranslationErrorMap.get(translationKey);
-
-  // Generate unique ID for this translation span
-  const spanId = `translation-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-
-  // If no translation yet, show "Translating..." and set up a retry mechanism
-  if (!targetLanguageText) {
-    targetLanguageText = "Translating...";
-
-    // Queue this displayed text for translation since it wasn't found in cache
-    // This handles cases where VTT text differs from displayed text (YLE combines cues)
-    translationQueue.addToQueue(finnishText);
-    translationQueue.processQueue();
-
-    const startTime = Date.now();
-    // Set up a periodic check to update the translation when it arrives
-    const checkTranslation = setInterval(() => {
-      const translation = sharedTranslationMap.get(translationKey) || sharedTranslationErrorMap.get(translationKey);
-      // Find the specific span by ID to avoid updating wrong subtitle
-      const translationSpan = document.getElementById(spanId);
-
-      if (!translationSpan) {
-        // Span no longer exists (subtitle changed), stop checking
-        clearInterval(checkTranslation);
-        return;
-      }
-
-      if (translation) {
-        translationSpan.textContent = translation;
-        clearInterval(checkTranslation);
-      } else if (Date.now() - startTime > 15000) {
-        // After 15 seconds, fall back to showing original text
-        translationSpan.textContent = finnishText;
-        translationSpan.style.opacity = '0.6';
-        translationSpan.title = 'Translation timed out - showing original';
-        clearInterval(checkTranslation);
-        console.warn("YleDualSubExtension: Translation timed out for:", finnishText.substring(0, 30));
-      }
-    }, 500);
-    // Clear interval after 20 seconds as final safety net
-    setTimeout(() => clearInterval(checkTranslation), 20000);
-  }
-
-  const targetLanguageSpan = createSubtitleSpan(targetLanguageText, `${spanClassName} translated-text-span`);
-  targetLanguageSpan.id = spanId;
-
   displayedSubtitlesWrapper.appendChild(finnishSpan);
-  displayedSubtitlesWrapper.appendChild(targetLanguageSpan);
+
+  // Only add translation line when dualSubEnabled is true
+  if (dualSubEnabled) {
+    const translationKey = toTranslationKey(finnishText);
+    let targetLanguageText =
+      sharedTranslationMap.get(translationKey) ||
+      sharedTranslationErrorMap.get(translationKey);
+
+    // Generate unique ID for this translation span
+    const spanId = `translation-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+
+    // If no translation yet, show "Translating..." and set up a retry mechanism
+    if (!targetLanguageText) {
+      targetLanguageText = "Translating...";
+
+      // Queue this displayed text for translation since it wasn't found in cache
+      // This handles cases where VTT text differs from displayed text (YLE combines cues)
+      translationQueue.addToQueue(finnishText);
+      translationQueue.processQueue();
+
+      const startTime = Date.now();
+      // Set up a periodic check to update the translation when it arrives
+      const checkTranslation = setInterval(() => {
+        const translation = sharedTranslationMap.get(translationKey) || sharedTranslationErrorMap.get(translationKey);
+        // Find the specific span by ID to avoid updating wrong subtitle
+        const translationSpan = document.getElementById(spanId);
+
+        if (!translationSpan) {
+          // Span no longer exists (subtitle changed), stop checking
+          clearInterval(checkTranslation);
+          return;
+        }
+
+        if (translation) {
+          translationSpan.textContent = translation;
+          clearInterval(checkTranslation);
+        } else if (Date.now() - startTime > 15000) {
+          // After 15 seconds, fall back to showing original text
+          translationSpan.textContent = finnishText;
+          translationSpan.style.opacity = '0.6';
+          translationSpan.title = 'Translation timed out - showing original';
+          clearInterval(checkTranslation);
+          console.warn("YleDualSubExtension: Translation timed out for:", finnishText.substring(0, 30));
+        }
+      }, 500);
+      // Clear interval after 20 seconds as final safety net
+      setTimeout(() => clearInterval(checkTranslation), 20000);
+    }
+
+    const targetLanguageSpan = createSubtitleSpan(targetLanguageText, `${spanClassName} translated-text-span`);
+    targetLanguageSpan.id = spanId;
+    displayedSubtitlesWrapper.appendChild(targetLanguageSpan);
+  }
 
   // Check for auto-pause
   checkAndAutoPause(finnishText);
@@ -1733,341 +1934,8 @@ function _handleDualSubBehaviourBasedOnSelectedToken(hasSelectedToken) {
  * @returns {Promise<void>}
  */
 async function addDualSubExtensionSection() {
-  // Load preferences FIRST before creating the UI
-  // This ensures the template has the correct values
-  try {
-    const result = await chrome.storage.sync.get(["dualSubEnabled", "autoPauseEnabled"]);
-    console.log("YleDualSubExtension: Pre-loading preferences:", result);
-    if (typeof result.dualSubEnabled === 'boolean') {
-      dualSubEnabled = result.dualSubEnabled;
-    }
-    if (typeof result.autoPauseEnabled === 'boolean') {
-      autoPauseEnabled = result.autoPauseEnabled;
-    }
-  } catch (e) {
-    console.warn("YleDualSubExtension: Error pre-loading preferences:", e);
-  }
-
-  let bottomControlBarLeftControls = null;
-
-  for (let attempt = 0; attempt < 8; attempt++) {
-    bottomControlBarLeftControls = document.querySelector(
-      '[class^="BottomControlBar__LeftControls"]'
-    );
-    if (bottomControlBarLeftControls) {
-      break;
-    };
-    await sleep(150);
-  }
-
-  if (!bottomControlBarLeftControls) {
-    console.error("YleDualSubExtension: Cannot find bottom control bar left controls");
-    return;
-  }
-
-  const existingSection = document.querySelector(".dual-sub-extension-section");
-  if (existingSection) {
-    try {
-      existingSection.remove();
-    } catch (err) {
-      // Probably never happens, but just in case
-      console.error("YleDualSubExtension: Error removing existing dual sub extension section:", err);
-      if (existingSection.parentNode) {
-        try {
-          existingSection.parentNode.removeChild(existingSection);
-        } catch (error) {
-          console.error("YleDualSubExtension: Error removing existing dual sub extension section via parentNode:", error);
-        }
-      }
-    }
-  }
-
-  const dualSubExtensionSection = `
-    <div class="dual-sub-extension-section">
-      <span>Dual Sub:</span>
-      <input id="dual-sub-switch" class="dual-sub-switch" type="checkbox" ${dualSubEnabled ? 'checked' : ''}>
-      <span class="dual-sub-warning" style="display: none;">
-        <span class="dual-sub-warning__icon">
-          !
-        </span>
-        <span class="dual-sub-warning__popover">
-          Translation provider not configured!<br>
-          Please configure your provider in <a href="#" id="open-options-link">the settings</a>.<br>
-          (Google Translate works without an API key)<br>
-          See
-          <a href="https://anhtumai.github.io/yle-dual-sub"
-             target="_blank"
-             rel="noopener noreferrer">
-            guide
-          </a>
-          for more information.
-        </span>
-      </span>
-
-      <button aria-label="Open settings" type="button" id="yle-dual-sub-settings-button" style="margin-left: 16px;">
-        <svg width="22" height="22" fill="none" viewBox="0 0 22 22" aria-hidden="true">
-          <path fill="currentColor" d="M20.207 9.017l-1.845-.424a7.2 7.2 0 0 0-.663-1.6l1.045-1.536a1 1 0 0 0-.121-1.29l-1.398-1.398a1 1 0 0 0-1.29-.121l-1.536 1.045a7.2 7.2 0 0 0-1.6-.663l-.424-1.845A1 1 0 0 0 11.4.75h-1.978a1 1 0 0 0-.975.435l-.424 1.845a7.2 7.2 0 0 0-1.6.663L4.887 2.648a1 1 0 0 0-1.29.121L2.199 4.167a1 1 0 0 0-.121 1.29l1.045 1.536a7.2 7.2 0 0 0-.663 1.6l-1.845.424A1 1 0 0 0 .18 10v1.978a1 1 0 0 0 .435.975l1.845.424a7.2 7.2 0 0 0 .663 1.6l-1.045 1.536a1 1 0 0 0 .121 1.29l1.398 1.398a1 1 0 0 0 1.29.121l1.536-1.045a7.2 7.2 0 0 0 1.6.663l.424 1.845a1 1 0 0 0 .975.435h1.978a1 1 0 0 0 .975-.435l.424-1.845a7.2 7.2 0 0 0 1.6-.663l1.536 1.045a1 1 0 0 0 1.29-.121l1.398-1.398a1 1 0 0 0 .121-1.29l-1.045-1.536a7.2 7.2 0 0 0 .663-1.6l1.845-.424a1 1 0 0 0 .435-.975V10a1 1 0 0 0-.435-.975v-.008zM11 15a4 4 0 1 1 0-8 4 4 0 0 1 0 8z"/>
-        </svg>
-        <div aria-hidden="true" class="dual-sub-extension-section_settings_tooltip" style="top: -72px;">
-          Open settings
-        </div>
-      </button>
-
-      <button aria-label="Previous subtitle" type="button" id="yle-dual-sub-rewind-button">
-        <svg width="22" height="22" fill="none" viewBox="0 0 22 22" aria-hidden="true">
-          <path fill="currentColor" d="M6 4a1 1 0 0 0-1 1v12a1 1 0 1 0 2 0V5a1 1 0 0 0-1-1zm11.707 1.293a1 1 0 0 0-1.414 0L11 10.586V5a1 1 0 1 0-2 0v12a1 1 0 1 0 2 0v-5.586l5.293 5.293a1 1 0 0 0 1.414-1.414L12.414 11l5.293-5.293a1 1 0 0 0 0-1.414z"/>
-        </svg>
-        <div aria-hidden="true" class="dual-sub-extension-section_rewind_tooltip">
-          Previous subtitle<br />
-          Tip: Press "," (comma) key
-        </div>
-      </button>
-      <button aria-label="Next subtitle" type="button" id="yle-dual-sub-forward-button">
-        <svg width="22" height="22" fill="none" viewBox="0 0 22 22" aria-hidden="true">
-          <path fill="currentColor" d="M16 4a1 1 0 0 1 1 1v12a1 1 0 1 1-2 0V5a1 1 0 0 1 1-1zM4.293 5.293a1 1 0 0 1 1.414 0L11 10.586V5a1 1 0 1 1 2 0v12a1 1 0 1 1-2 0v-5.586l-5.293 5.293a1 1 0 0 1-1.414-1.414L9.586 11 4.293 6.707a1 1 0 0 1 0-1.414z"/>
-        </svg>
-        <div aria-hidden="true" class="dual-sub-extension-section_forward_tooltip">
-          Next subtitle<br />
-          Tip: Press "." (dot) key
-        </div>
-      </button>
-
-      <span style="margin-left: 12px; border-left: 1px solid rgba(255,255,255,0.2); padding-left: 12px; display: flex; align-items: center; gap: 6px;">
-        <span style="font-size: 12px; opacity: 0.8;">Auto-Pause:</span>
-        <input id="auto-pause-switch" class="auto-pause-switch" type="checkbox" ${autoPauseEnabled ? 'checked' : ''} title="Pause video after each subtitle line (Shortcut: P)">
-      </span>
-
-      <span style="margin-left: 12px; border-left: 1px solid rgba(255,255,255,0.2); padding-left: 12px; display: flex; align-items: center; gap: 6px;">
-        <span style="font-size: 12px; opacity: 0.8;">Speed:</span>
-        <select id="yle-playback-speed" class="yle-speed-select" title="Playback speed">
-          <option value="1" ${playbackSpeed === 1 ? 'selected' : ''}>1x</option>
-          <option value="1.25" ${playbackSpeed === 1.25 ? 'selected' : ''}>1.25x</option>
-          <option value="1.5" ${playbackSpeed === 1.5 ? 'selected' : ''}>1.5x</option>
-          <option value="1.75" ${playbackSpeed === 1.75 ? 'selected' : ''}>1.75x</option>
-          <option value="2" ${playbackSpeed === 2 ? 'selected' : ''}>2x</option>
-        </select>
-      </span>
-
-    </div>
-  `
-  bottomControlBarLeftControls.insertAdjacentHTML('beforeend', dualSubExtensionSection);
-
-  // Display warning section if no provider is configured
-  // Google Translate doesn't need a key, so check if provider is set
-  const hasValidProvider = await checkHasValidProvider();
-  _handleDualSubBehaviourBasedOnSelectedToken(hasValidProvider);
-
-  // Load and set initial state of dual sub switch from storage
-  const dualSubSwitch = document.getElementById("dual-sub-switch");
-  if (dualSubSwitch) {
-    // Load from storage to ensure we have the latest value
-    try {
-      const result = await chrome.storage.sync.get("dualSubEnabled");
-      console.log("YleDualSubExtension: Storage result for dualSubEnabled:", result);
-      if (result && typeof result.dualSubEnabled === 'boolean') {
-        dualSubEnabled = result.dualSubEnabled;
-        console.log("YleDualSubExtension: Set dualSubEnabled to:", dualSubEnabled);
-      } else {
-        console.log("YleDualSubExtension: No boolean value in storage, keeping dualSubEnabled as:", dualSubEnabled);
-      }
-    } catch (e) {
-      console.warn("YleDualSubExtension: Error loading dual sub preference:", e);
-    }
-
-    dualSubSwitch.checked = dualSubEnabled;
-    console.log("YleDualSubExtension: Set checkbox checked to:", dualSubSwitch.checked);
-
-    // If enabled, trigger the change handler to set up subtitles
-    if (dualSubEnabled && hasValidProvider) {
-      console.log("YleDualSubExtension: Triggering change event for enabled dual sub");
-      dualSubSwitch.dispatchEvent(new Event('change', { bubbles: true }));
-    }
-  }
-
-  // Dual sub warning logic
-  const warningIcon = document.querySelector(".dual-sub-warning__icon");
-  const warningPopover = document.querySelector(".dual-sub-warning__popover");
-  const openOptionsLink = document.getElementById("open-options-link");
-
-  warningIcon.addEventListener("click", (e) => {
-    e.stopPropagation();
-    warningPopover.classList.toggle("active");
-  })
-
-  document.addEventListener("click", (e) => {
-    // @ts-ignore - EventTarget is used as Node at runtime
-    if (!warningPopover.contains(e.target) && !warningIcon.contains(e.target)) {
-      warningPopover.classList.remove("active");
-    }
-  })
-
-  warningPopover.addEventListener("click", (e) => {
-    e.stopPropagation();
-  })
-
-  openOptionsLink.addEventListener("click", (e) => {
-    e.preventDefault();
-    safeSendMessage({ action: 'openOptionsPage' });
-  })
-
-  // Setting button logic
-  const settingsButton = document.getElementById('yle-dual-sub-settings-button');
-  if (settingsButton) {
-    settingsButton.addEventListener('click', (e) => {
-      safeSendMessage({ action: 'openOptionsPage' });
-      // Focus video to enable keyboard controls
-      focusVideo();
-    });
-  }
-  else {
-    console.error("YleDualSubExtension: Cannot find settings button");
-  }
-
-  // Playback speed control logic
-  const speedSelect = document.getElementById('yle-playback-speed');
-  if (speedSelect) {
-    speedSelect.addEventListener('change', (e) => {
-      const newSpeed = parseFloat(e.target.value);
-      savePlaybackSpeed(newSpeed);
-      console.info(`YleDualSubExtension: Playback speed set to ${newSpeed}x`);
-      // Focus video to enable keyboard controls
-      focusVideo();
-    });
-    // Apply saved speed immediately
-    applyPlaybackSpeed();
-  }
-
-  // Skip to previous/next subtitle button logic
-  function subtitleSkipLogicHandle() {
-    const videoElement = document.querySelector('video');
-    if (!videoElement) {
-      console.error("YleDualSubExtension: Cannot find video element");
-      return;
-    }
-
-    function skipToNextSubtitle() {
-      // Temporarily disable auto-pause during skip
-      isSkippingSubtitle = true;
-      const currentTime = videoElement.currentTime;
-      // Find the next subtitle timestamp after current time
-      const nextSubtitle = subtitleTimestamps.find(entry => entry.time > currentTime + 0.5);
-      if (nextSubtitle) {
-        videoElement.currentTime = nextSubtitle.time;
-      } else {
-        // No next subtitle found, skip forward 5 seconds as fallback
-        videoElement.currentTime = currentTime + 5;
-      }
-      // Re-enable auto-pause after a short delay to let the new subtitle appear
-      setTimeout(() => { isSkippingSubtitle = false; }, 800);
-    }
-
-    function skipToPreviousSubtitle() {
-      // Temporarily disable auto-pause during skip
-      isSkippingSubtitle = true;
-      const currentTime = videoElement.currentTime;
-      // Find the previous subtitle timestamp before current time
-      // We look for subtitles at least 1 second before current position
-      const previousSubtitles = subtitleTimestamps.filter(entry => entry.time < currentTime - 1);
-      if (previousSubtitles.length > 0) {
-        const previousSubtitle = previousSubtitles[previousSubtitles.length - 1];
-        videoElement.currentTime = previousSubtitle.time;
-      } else {
-        // No previous subtitle found, skip back 5 seconds as fallback
-        videoElement.currentTime = Math.max(0, currentTime - 5);
-      }
-      // Re-enable auto-pause after a short delay to let the new subtitle appear
-      setTimeout(() => { isSkippingSubtitle = false; }, 800);
-    }
-
-    document.addEventListener('keydown', (event) => {
-      if (!videoElement) { return; }
-      // Don't trigger if user is typing in an input field
-      if (event.target.tagName === 'INPUT' || event.target.tagName === 'TEXTAREA') {
-        return;
-      }
-
-      if (event.key === ',') {
-        event.preventDefault();
-        skipToPreviousSubtitle();
-      } else if (event.key === '.') {
-        event.preventDefault();
-        skipToNextSubtitle();
-      }
-    });
-
-    const prevButton = document.getElementById('yle-dual-sub-rewind-button');
-    const nextButton = document.getElementById('yle-dual-sub-forward-button');
-
-    if (prevButton) {
-      prevButton.addEventListener('click', (e) => {
-        skipToPreviousSubtitle();
-        // Focus video to enable keyboard controls
-        focusVideo();
-      });
-    }
-    else {
-      console.error("YleDualSubExtension: Cannot find previous subtitle button");
-    }
-
-    if (nextButton) {
-      nextButton.addEventListener('click', (e) => {
-        skipToNextSubtitle();
-        // Focus video to enable keyboard controls
-        focusVideo();
-      });
-    }
-    else {
-      console.error("YleDualSubExtension: Cannot find next subtitle button");
-    }
-
-    // Add keyboard shortcut for auto-pause toggle (P key)
-    document.addEventListener('keydown', (event) => {
-      if (event.key === 'p' || event.key === 'P') {
-        // Don't toggle if user is typing in an input field
-        if (event.target.tagName === 'INPUT' || event.target.tagName === 'TEXTAREA') {
-          return;
-        }
-        event.preventDefault();
-        const autoPauseSwitch = document.getElementById('auto-pause-switch');
-        if (autoPauseSwitch) {
-          autoPauseSwitch.click();
-        }
-      }
-    });
-  }
-  subtitleSkipLogicHandle();
-
-  // Auto-pause switch logic
-  const autoPauseSwitch = document.getElementById('auto-pause-switch');
-  if (autoPauseSwitch) {
-    // Set initial state
-    autoPauseSwitch.checked = autoPauseEnabled;
-
-    autoPauseSwitch.addEventListener('change', (e) => {
-      autoPauseEnabled = e.target.checked;
-      console.log("YleDualSubExtension: Auto-pause toggled:", autoPauseEnabled);
-      // Reset last subtitle text when toggling to avoid immediate pause
-      lastSubtitleText = "";
-      // Save preference to Chrome storage
-      chrome.storage.sync.set({ autoPauseEnabled }).then(() => {
-        console.log("YleDualSubExtension: Auto-pause preference saved:", autoPauseEnabled);
-      }).catch(err => {
-        console.warn("YleDualSubExtension: Error saving auto-pause preference:", err);
-      });
-      // Focus video to enable keyboard controls
-      focusVideo();
-    });
-
-    // Also handle clicks directly on the switch (for better compatibility)
-    autoPauseSwitch.addEventListener('click', (e) => {
-      // The change event will handle the state update
-      e.stopPropagation();
-      // Focus video to enable keyboard controls
-      setTimeout(focusVideo, 100);
-    });
-  } else {
-    console.warn("YleDualSubExtension: Auto-pause switch not found in DOM");
-  }
+  console.log('DualSubExtension: addDualSubExtensionSection called');
+  await initializeUnifiedControlPanel();
 }
 
 /**
@@ -2108,13 +1976,24 @@ async function getVideoTitle() {
 /**
  * This function acts as a handler when new movie is played.
  * It will load that movie's subtitle from database and update metadata.
+ * @param {string} [movieName] - Optional movie name. If not provided, will try to get from YLE page.
  * @returns {Promise<void>}
  */
-async function loadMovieCacheAndUpdateMetadata() {
+async function loadMovieCacheAndUpdateMetadata(movieName) {
 
   const db = await openDatabase();
 
-  currentMovieName = await getVideoTitle();
+  // Clear accumulated subtitles when starting a new video
+  subtitleTimestamps.length = 0;
+  fullSubtitles.length = 0;
+
+  // Use provided movie name or try to get from YLE page
+  if (movieName) {
+    currentMovieName = movieName;
+  } else if (currentPlatform.name === 'yle') {
+    currentMovieName = await getVideoTitle();
+  }
+
   if (!currentMovieName) {
     return;
   }
@@ -2136,35 +2015,38 @@ async function loadMovieCacheAndUpdateMetadata() {
   await upsertMovieMetadata(db, currentMovieName, lastAccessedDays);
 }
 
-const observer = new MutationObserver((mutations) => {
-  mutations.forEach((mutation) => {
-    if (mutation.type === "childList") {
-      if (isMutationRelatedToSubtitlesWrapper(mutation)) {
-        if (dualSubEnabled) {
+// YLE-specific MutationObserver - only run on YLE platform
+if (currentPlatform.name === 'yle') {
+  const observer = new MutationObserver((mutations) => {
+    mutations.forEach((mutation) => {
+      if (mutation.type === "childList") {
+        if (isMutationRelatedToSubtitlesWrapper(mutation)) {
+          // ALWAYS process subtitle mutations to show clickable original text
+          // Translation line visibility is controlled inside the handler
           handleSubtitlesWrapperMutation(mutation);
           return;
         }
+        if (isVideoElementAppearMutation(mutation)) {
+          addDualSubExtensionSection().then(() => { }).catch((error) => {
+            console.error("YleDualSubExtension: Error adding dual sub extension section:", error);
+          });
+          loadMovieCacheAndUpdateMetadata().then(() => { }).catch((error) => {
+            console.error("YleDualSubExtension: Error populating shared translation map from cache:", error);
+          });
+          // Apply saved playback speed
+          setupVideoSpeedControl();
+        }
       }
-      if (isVideoElementAppearMutation(mutation)) {
-        addDualSubExtensionSection().then(() => { }).catch((error) => {
-          console.error("YleDualSubExtension: Error adding dual sub extension section:", error);
-        });
-        loadMovieCacheAndUpdateMetadata().then(() => { }).catch((error) => {
-          console.error("YleDualSubExtension: Error populating shared translation map from cache:", error);
-        });
-        // Apply saved playback speed
-        setupVideoSpeedControl();
-      }
-    }
+    });
   });
-});
 
-// Start observing the document for added nodes
-if (document.body instanceof Node) {
-  observer.observe(document.body, {
-    childList: true,
-    subtree: true,
-  });
+  // Start observing the document for added nodes
+  if (document.body instanceof Node) {
+    observer.observe(document.body, {
+      childList: true,
+      subtree: true,
+    });
+  }
 }
 
 
@@ -2205,17 +2087,27 @@ document.addEventListener("sendTranslationTextEvent", (e) => {
 document.addEventListener("sendBatchTranslationEvent", (e) => {
   /**
    * Handle batch translation of all subtitles with context
-   * This is triggered when a VTT file is loaded
+   * This is triggered when a VTT file is loaded (YLE) or timedtext API response (YouTube)
    */
-  const { subtitles } = e.detail;
+  const { subtitles, source } = e.detail;
 
   if (!subtitles || subtitles.length === 0) {
     return;
   }
 
+  // For YouTube, only process on watch pages
+  if (currentPlatform.name === 'youtube') {
+    if (window.location.pathname !== '/watch') {
+      console.info('DualSubExtension: Ignoring batch translation - not on YouTube watch page');
+      return;
+    }
+  }
+
+  console.info(`DualSubExtension: Processing batch of ${subtitles.length} subtitles from ${source || 'unknown'}`);
+
   // Start batch translation in the background
   handleBatchTranslation(subtitles).catch((error) => {
-    console.error("YleDualSubExtension: Error in batch translation:", error);
+    console.error("DualSubExtension: Error in batch translation:", error);
   });
 });
 
@@ -2256,59 +2148,795 @@ document.addEventListener("change", (e) => {
    */
   if (e.target.id === "dual-sub-switch") {
     dualSubEnabled = e.target.checked;
-    console.log("YleDualSubExtension: Dual sub switch changed to:", dualSubEnabled);
+    console.log("DualSubExtension: Dual sub switch changed to:", dualSubEnabled);
     // Focus video to enable keyboard controls
     focusVideo();
     // Save preference to chrome storage
     chrome.storage.sync.set({ dualSubEnabled }).then(async () => {
-      console.log("YleDualSubExtension: Saved dualSubEnabled to storage:", dualSubEnabled);
+      console.log("DualSubExtension: Saved dualSubEnabled to storage:", dualSubEnabled);
       // Verify the save worked by reading it back
       const verify = await chrome.storage.sync.get("dualSubEnabled");
-      console.log("YleDualSubExtension: Verified storage value:", verify);
+      console.log("DualSubExtension: Verified storage value:", verify);
     }).catch(err => {
-      console.error("YleDualSubExtension: Error saving dualSubEnabled:", err);
+      console.error("DualSubExtension: Error saving dualSubEnabled:", err);
     });
-    if (e.target.checked) {
-      const originalSubtitlesWrapper = document.querySelector('[data-testid="subtitles-wrapper"]');
-      if (!originalSubtitlesWrapper) {
-        console.error(
-          "YleDualSubExtension: This should not happen: " +
-          "When the video is loaded the subtitles wrapper should be there"
-        );
-        e.target.checked = false;
-        dualSubEnabled = false;
-        return;
-      }
-      originalSubtitlesWrapper.style.display = "none";
-      const displayedSubtitlesWrapper = createAndPositionDisplayedSubtitlesWrapper(
-        // @ts-ignore - Element is used as HTMLElement at runtime
-        originalSubtitlesWrapper
-      );
-      displayedSubtitlesWrapper.innerHTML = "";
-      displayedSubtitlesWrapper.style.display = "flex";
 
-      const originalSubtitlesWrapperSpans = originalSubtitlesWrapper.querySelectorAll('span');
-      if (originalSubtitlesWrapperSpans) {
-        addContentToDisplayedSubtitlesWrapper(
-          displayedSubtitlesWrapper,
-          // @ts-ignore - NodeListOf<Element> is used as NodeListOf<HTMLSpanElement> at runtime
-          originalSubtitlesWrapperSpans,
-        )
-      }
-      translationQueue.processQueue().then(() => { }).catch((error) => {
-        console.error("YleDualSubExtension: Error processing translation queue after enabling dual subtitles:", error);
-      });
-    }
-    else {
-      const displayedSubtitlesWrapper = document.getElementById("displayed-subtitles-wrapper");
-      if (displayedSubtitlesWrapper) {
+    // Platform-specific handling
+    if (currentPlatform.name === 'yle') {
+      // YLE-specific dual sub toggle logic
+      if (e.target.checked) {
+        const originalSubtitlesWrapper = document.querySelector('[data-testid="subtitles-wrapper"]');
+        if (!originalSubtitlesWrapper) {
+          console.error(
+            "DualSubExtension: This should not happen: " +
+            "When the video is loaded the subtitles wrapper should be there"
+          );
+          e.target.checked = false;
+          dualSubEnabled = false;
+          return;
+        }
+        originalSubtitlesWrapper.style.display = "none";
+        const displayedSubtitlesWrapper = createAndPositionDisplayedSubtitlesWrapper(
+          // @ts-ignore - Element is used as HTMLElement at runtime
+          originalSubtitlesWrapper
+        );
         displayedSubtitlesWrapper.innerHTML = "";
-        displayedSubtitlesWrapper.style.display = "none";
+        displayedSubtitlesWrapper.style.display = "flex";
+
+        const originalSubtitlesWrapperSpans = originalSubtitlesWrapper.querySelectorAll('span');
+        if (originalSubtitlesWrapperSpans) {
+          addContentToDisplayedSubtitlesWrapper(
+            displayedSubtitlesWrapper,
+            // @ts-ignore - NodeListOf<Element> is used as NodeListOf<HTMLSpanElement> at runtime
+            originalSubtitlesWrapperSpans,
+          )
+        }
+        translationQueue.processQueue().then(() => { }).catch((error) => {
+          console.error("DualSubExtension: Error processing translation queue after enabling dual subtitles:", error);
+        });
       }
-      const originalSubtitlesWrapper = document.querySelector('[data-testid="subtitles-wrapper"]');
-      if (originalSubtitlesWrapper) {
-        originalSubtitlesWrapper.style.display = "flex";
+      else {
+        // When dual sub is disabled, keep showing clickable original text
+        // Just remove the translation spans, don't hide the wrapper
+        const displayedSubtitlesWrapper = document.getElementById("displayed-subtitles-wrapper");
+        if (displayedSubtitlesWrapper) {
+          // Remove only translation spans, keep original clickable text
+          const translationSpans = displayedSubtitlesWrapper.querySelectorAll('.translated-text-span');
+          translationSpans.forEach(span => span.remove());
+        }
+        // Keep original YLE subtitles hidden - we show our clickable version instead
+      }
+    } else if (currentPlatform.name === 'youtube') {
+      // YouTube-specific dual sub toggle logic
+      if (e.target.checked) {
+        YouTubeAdapter.hideNativeCaptions();
+      } else {
+        YouTubeAdapter.showNativeCaptions();
+        const displayedSubtitlesWrapper = document.getElementById("displayed-subtitles-wrapper");
+        if (displayedSubtitlesWrapper) {
+          displayedSubtitlesWrapper.innerHTML = "";
+        }
+      }
+    } else if (currentPlatform.name === 'html5') {
+      // HTML5-specific toggle logic
+      const displayedSubtitlesWrapper = document.getElementById("displayed-subtitles-wrapper");
+      if (!e.target.checked && displayedSubtitlesWrapper) {
+        displayedSubtitlesWrapper.innerHTML = "";
       }
     }
   }
 });
+
+// ==================================
+// SECTION: YOUTUBE PLATFORM SUPPORT
+// ==================================
+
+if (currentPlatform.name === 'youtube') {
+  console.info('DualSubExtension: Initializing YouTube support - platform detected correctly');
+  // Debug: Add a visible indicator that the extension is running
+  console.log('DualSubExtension DEBUG: YouTube block entered, isVideoPage:',
+    typeof YouTubeAdapter !== 'undefined' ? YouTubeAdapter.isVideoPage() : 'adapter not loaded');
+
+  // YouTube-specific state
+  let ytSourceLanguage = 'en';
+  let ytSubtitlesMap = new Map(); // language -> subtitles array
+  let ytCurrentSubtitles = []; // Current language subtitles
+  let ytLastCaptionText = '';
+
+  // Listen for caption tracks being discovered
+  document.addEventListener('youtubeCaptionTracksAvailable', (e) => {
+    const { tracks, videoId } = e.detail;
+    console.info('DualSubExtension: YouTube caption tracks available:', tracks.length);
+
+    if (typeof YouTubeAdapter !== 'undefined') {
+      YouTubeAdapter.setCaptionTracks(tracks);
+      // Update language selector if control bar exists
+      updateYouTubeLanguageSelector(tracks);
+    }
+  });
+
+  // Listen for subtitles loaded from any language
+  document.addEventListener('youtubeSubtitlesLoaded', (e) => {
+    const { subtitles, language } = e.detail;
+    console.info(`DualSubExtension: Loaded ${subtitles.length} subtitles for ${language}`);
+
+    // Check if we already have these subtitles cached (avoid duplicate processing)
+    const existingSubtitles = ytSubtitlesMap.get(language);
+    const alreadyCached = existingSubtitles && existingSubtitles.length === subtitles.length;
+
+    // Store subtitles by language
+    ytSubtitlesMap.set(language, subtitles);
+
+    // Use these subtitles if:
+    // 1. This is our current source language, OR
+    // 2. We don't have any subtitles yet (use whatever is available)
+    const shouldUseSubtitles = (language === ytSourceLanguage) || (ytCurrentSubtitles.length === 0);
+
+    if (shouldUseSubtitles) {
+      ytCurrentSubtitles = subtitles;
+
+      // If using a different language than expected, update the source language
+      if (language !== ytSourceLanguage) {
+        ytSourceLanguage = language;
+        console.info(`DualSubExtension: Switched source language to ${language} (available subtitles)`);
+
+        // Update UI selector if exists
+        const langSelector = document.getElementById('dual-sub-source-lang');
+        if (langSelector) {
+          langSelector.value = language;
+        }
+      }
+
+      // Populate timestamps for navigation (and full subtitles for repeat)
+      subtitleTimestamps.length = 0;
+      fullSubtitles.length = 0;
+      subtitles.forEach(sub => {
+        subtitleTimestamps.push({ time: sub.startTime, text: sub.text });
+        if (sub.endTime !== undefined) {
+          fullSubtitles.push({ startTime: sub.startTime, endTime: sub.endTime, text: sub.text });
+        }
+      });
+      console.info(`DualSubExtension: Populated ${subtitleTimestamps.length} timestamps and ${fullSubtitles.length} full subtitles`);
+
+      // Update ControlIntegration with subtitles for navigation
+      if (typeof ControlIntegration !== 'undefined' && ControlIntegration.isInitialized()) {
+        ControlIntegration.setSubtitles(fullSubtitles);
+      }
+
+      // Only start batch translation if:
+      // 1. Dual sub is enabled
+      // 2. We have subtitles
+      // 3. We haven't already translated these (not cached or translations empty)
+      const needsTranslation = !alreadyCached || sharedTranslationMap.size === 0;
+      if (dualSubEnabled && subtitles.length > 0 && needsTranslation && !isBatchTranslating) {
+        handleBatchTranslation(subtitles).catch(err => {
+          console.error('DualSubExtension: Batch translation error:', err);
+        });
+      }
+    }
+  });
+
+  // Guard flags to prevent double initialization of YouTube video
+  let _youtubeVideoInitializing = false;
+  let _youtubeVideoInitialized = false;
+  let _youtubeLastVideoId = null;
+
+  // Set up YouTube SPA navigation handler
+  if (typeof YouTubeAdapter !== 'undefined') {
+    YouTubeAdapter.setupNavigationHandler(() => {
+      console.info('DualSubExtension: YouTube navigation detected');
+      // Reset state on navigation
+      sharedTranslationMap.clear();
+      sharedTranslationErrorMap.clear();
+      subtitleTimestamps.length = 0;
+      fullSubtitles.length = 0;
+      ytSubtitlesMap.clear();
+      ytCurrentSubtitles = [];
+      isBatchTranslating = false;
+      lastDisplayedSubtitleText = "";
+      ytLastCaptionText = '';
+
+      // Remove old UI elements
+      const oldOverlay = document.getElementById('dual-sub-overlay');
+      if (oldOverlay) oldOverlay.remove();
+      const oldControls = document.querySelector('.dual-sub-extension-section.dual-sub-youtube');
+      if (oldControls) oldControls.remove();
+      const oldIntegratedControls = document.getElementById('dual-sub-yt-controls');
+      if (oldIntegratedControls) oldIntegratedControls.remove();
+      // Also remove unified control panel
+      const oldUnifiedPanel = document.getElementById('dsc-control-panel');
+      if (oldUnifiedPanel) oldUnifiedPanel.remove();
+      // Cleanup ControlIntegration
+      if (typeof ControlIntegration !== 'undefined') {
+        ControlIntegration.cleanup();
+      }
+
+      // Reset initialization flags for new video
+      _youtubeVideoInitializing = false;
+      _youtubeVideoInitialized = false;
+      _youtubeLastVideoId = null;
+
+      // Re-initialize for new video if on watch page
+      if (YouTubeAdapter.isVideoPage()) {
+        setTimeout(initializeYouTubeVideo, 1000);
+      }
+    });
+  }
+
+  /**
+   * Update language selector dropdown with available tracks
+   */
+  function updateYouTubeLanguageSelector(tracks) {
+    const selector = document.getElementById('dual-sub-source-lang');
+    if (!selector) return;
+
+    // Build available languages from tracks
+    const availableLangs = tracks.map(t => ({
+      code: t.languageCode,
+      name: t.name || t.languageCode.toUpperCase()
+    }));
+
+    // Default languages
+    const defaultLangs = [
+      { code: 'en', name: 'English' },
+      { code: 'fi', name: 'Finnish' },
+      { code: 'es', name: 'Spanish' },
+      { code: 'de', name: 'German' },
+      { code: 'fr', name: 'French' },
+      { code: 'ja', name: 'Japanese' },
+      { code: 'ko', name: 'Korean' },
+      { code: 'zh', name: 'Chinese' }
+    ];
+
+    // Merge and dedupe
+    const langMap = new Map();
+    availableLangs.forEach(l => langMap.set(l.code, l.name));
+    defaultLangs.forEach(l => { if (!langMap.has(l.code)) langMap.set(l.code, l.name); });
+
+    // Update selector options
+    selector.innerHTML = Array.from(langMap.entries())
+      .map(([code, name]) => `<option value="${code}" ${code === ytSourceLanguage ? 'selected' : ''}>${name}</option>`)
+      .join('');
+  }
+
+  /**
+   * Initialize YouTube video support
+   */
+  async function initializeYouTubeVideo() {
+    if (!YouTubeAdapter.isVideoPage()) {
+      return;
+    }
+
+    // Get current video ID to detect actual video changes
+    const urlParams = new URLSearchParams(window.location.search);
+    const currentVideoId = urlParams.get('v');
+
+    // Skip if already initializing
+    if (_youtubeVideoInitializing) {
+      console.log('DualSubExtension: YouTube video already initializing, skipping');
+      return;
+    }
+
+    // Skip if already initialized for this video (unless video changed)
+    if (_youtubeVideoInitialized && _youtubeLastVideoId === currentVideoId) {
+      console.log('DualSubExtension: YouTube video already initialized for this video, skipping');
+      return;
+    }
+
+    _youtubeVideoInitializing = true;
+    _youtubeLastVideoId = currentVideoId;
+
+    console.info('DualSubExtension: Initializing YouTube video');
+
+    // Wait for player to be ready
+    const player = await waitForYouTubePlayer();
+    if (!player) {
+      console.warn('DualSubExtension: Could not find YouTube player');
+      _youtubeVideoInitializing = false;  // Reset flag on early exit
+      return;
+    }
+
+    console.info('DualSubExtension: Found YouTube player');
+
+    // Remove existing control bar if present
+    const existing = document.querySelector('.dual-sub-extension-section.dual-sub-youtube');
+    if (existing) existing.remove();
+    const existingIntegrated = document.getElementById('dual-sub-yt-controls');
+    if (existingIntegrated) existingIntegrated.remove();
+
+    // Load preferences
+    try {
+      const result = await chrome.storage.sync.get(["dualSubEnabled", "autoPauseEnabled", "ytSourceLanguage"]);
+      if (typeof result.dualSubEnabled === 'boolean') dualSubEnabled = result.dualSubEnabled;
+      if (typeof result.autoPauseEnabled === 'boolean') autoPauseEnabled = result.autoPauseEnabled;
+      if (result.ytSourceLanguage) ytSourceLanguage = result.ytSourceLanguage;
+    } catch (e) {
+      console.warn("DualSubExtension: Error loading preferences:", e);
+    }
+
+    // Create controls integrated into YouTube's native control bar
+    createYouTubeFloatingControls(player, {
+      dualSubEnabled,
+      autoPauseEnabled,
+      sourceLanguage: ytSourceLanguage
+    });
+
+    // Create subtitle overlay
+    const overlay = YouTubeAdapter.createSubtitleOverlay();
+    const subtitleWrapper = YouTubeAdapter.createSubtitleDisplayWrapper();
+    overlay.appendChild(subtitleWrapper);
+    YouTubeAdapter.positionSubtitleOverlay(overlay);
+
+    // Watch for control bar visibility changes to adjust subtitle position
+    setupYouTubeSubtitlePositionWatcher(player, overlay);
+
+    // Get video title for caching
+    currentMovieName = await YouTubeAdapter.getVideoTitle();
+    if (currentMovieName) {
+      await loadMovieCacheAndUpdateMetadata(currentMovieName);
+    }
+
+    // Start watching for caption changes
+    startYouTubeCaptionObserver();
+
+    // Mark initialization complete
+    _youtubeVideoInitializing = false;
+    _youtubeVideoInitialized = true;
+
+    console.info('DualSubExtension: YouTube video initialized with floating controls');
+  }
+
+  /**
+   * Wait for YouTube player element
+   */
+  async function waitForYouTubePlayer() {
+    // Try multiple selectors for the player container
+    const selectors = [
+      '#movie_player',
+      '#player-container-inner',
+      '#player-container',
+      'ytd-player',
+      '.html5-video-player'
+    ];
+
+    for (let i = 0; i < 30; i++) {
+      for (const selector of selectors) {
+        const player = document.querySelector(selector);
+        if (player) {
+          console.info('DualSubExtension: Found player element using selector:', selector);
+          return player;
+        }
+      }
+      await new Promise(r => setTimeout(r, 200));
+    }
+    console.warn('DualSubExtension: Could not find any player element');
+    return null;
+  }
+
+  /**
+   * Watch for YouTube control bar visibility and adjust subtitle position
+   */
+  function setupYouTubeSubtitlePositionWatcher(player, overlay) {
+    // YouTube adds 'ytp-autohide' class when controls are hidden
+    const updatePosition = () => {
+      const isControlsHidden = player.classList.contains('ytp-autohide');
+      // When controls are visible, subtitles need to be higher (above the control bar ~48px)
+      // When controls are hidden, subtitles match native position (~17px from bottom)
+      overlay.style.paddingBottom = isControlsHidden ? '17px' : '60px';
+    };
+
+    // Initial position
+    updatePosition();
+
+    // Watch for class changes on the player
+    const observer = new MutationObserver((mutations) => {
+      for (const mutation of mutations) {
+        if (mutation.type === 'attributes' && mutation.attributeName === 'class') {
+          updatePosition();
+        }
+      }
+    });
+
+    observer.observe(player, { attributes: true, attributeFilter: ['class'] });
+
+    // Also update on mouse activity
+    player.addEventListener('mousemove', updatePosition);
+    player.addEventListener('mouseenter', updatePosition);
+    player.addEventListener('mouseleave', () => {
+      // Small delay to let YouTube update its class
+      setTimeout(updatePosition, 100);
+    });
+  }
+
+  /**
+   * Create controls integrated into YouTube's native control bar (like YLE)
+   */
+  function createYouTubeFloatingControls(player, options) {
+    // Remove any existing old controls
+    const oldWrapper = document.getElementById('yle-dual-sub-wrapper');
+    if (oldWrapper) oldWrapper.remove();
+    const oldIntegrated = document.getElementById('dual-sub-yt-controls');
+    if (oldIntegrated) oldIntegrated.remove();
+    const oldSection = document.querySelector('.dual-sub-extension-section.dual-sub-youtube');
+    if (oldSection) oldSection.remove();
+
+    // Use the unified control panel
+    initializeUnifiedControlPanel();
+  }
+
+  /**
+   * Watch YouTube's native captions and display dual subtitles
+   */
+  function startYouTubeCaptionObserver() {
+    const video = YouTubeAdapter.getVideoElement();
+    if (!video) {
+      console.warn('DualSubExtension: No video element found for caption observer');
+      return;
+    }
+
+    console.info('DualSubExtension: Started caption observer, current subtitles count:', ytCurrentSubtitles.length);
+
+    // Log subtitle status periodically
+    let lastLogTime = 0;
+    const logInterval = 5000; // Log every 5 seconds
+
+    // Monitor video timeupdate to display subtitles and handle auto-pause
+    video.addEventListener('timeupdate', () => {
+      const now = Date.now();
+      if (now - lastLogTime > logInterval) {
+        lastLogTime = now;
+        console.info('DualSubExtension: Status - dualSubEnabled:', dualSubEnabled,
+          'ytCurrentSubtitles:', ytCurrentSubtitles.length,
+          'videoTime:', video.currentTime.toFixed(1));
+      }
+
+      // Skip if no subtitles loaded
+      if (ytCurrentSubtitles.length === 0) return;
+
+      const currentTime = video.currentTime;
+      const currentSub = ytCurrentSubtitles.find(sub =>
+        currentTime >= sub.startTime && currentTime <= sub.endTime
+      );
+
+      if (currentSub && currentSub.text !== ytLastCaptionText) {
+        ytLastCaptionText = currentSub.text;
+
+        // Always display our subtitle overlay (with clickable words)
+        // Translation line visibility is controlled inside displayYouTubeSubtitle
+        console.info('DualSubExtension: Displaying subtitle:', currentSub.text.substring(0, 50));
+        displayYouTubeSubtitle(currentSub.text);
+
+        // Auto-pause works independently of dual sub
+        if (autoPauseEnabled && !isSkippingSubtitle && !isRepeatingSubtitle) {
+          console.info('DualSubExtension: Auto-pause triggered');
+          video.pause();
+        }
+      } else if (!currentSub && ytLastCaptionText) {
+        ytLastCaptionText = '';
+        clearYouTubeSubtitle();
+      }
+    });
+  }
+
+  /**
+   * Display dual subtitle on YouTube
+   */
+  function displayYouTubeSubtitle(originalText) {
+    const wrapper = document.getElementById('displayed-subtitles-wrapper');
+    if (!wrapper) return;
+
+    // Hide YouTube's native captions each time we display our own
+    if (typeof YouTubeAdapter !== 'undefined') {
+      YouTubeAdapter.hideNativeCaptions();
+    }
+
+    // Get translation
+    const translationKey = toTranslationKey(originalText);
+    let translatedText = sharedTranslationMap.get(translationKey) ||
+                         sharedTranslationErrorMap.get(translationKey);
+
+    // Clear wrapper using DOM method (avoid innerHTML for Trusted Types)
+    while (wrapper.firstChild) {
+      wrapper.removeChild(wrapper.firstChild);
+    }
+
+    // Original text with clickable words (font size controlled by applySubtitleFontSize CSS)
+    // Always shown so users can click words to look up translations
+    const originalSpan = createSubtitleSpanWithClickableWords(originalText, 'dual-sub-original');
+    originalSpan.style.cssText = `
+      background: rgba(8, 8, 8, 0.75);
+      color: #fff;
+      padding: 1px 4px;
+      border-radius: 2px;
+      line-height: 1.4;
+      margin-bottom: 2px;
+    `;
+    wrapper.appendChild(originalSpan);
+
+    // Translation line - only shown when dualSubEnabled is true
+    if (dualSubEnabled) {
+      const translatedSpan = document.createElement('span');
+      translatedSpan.className = 'dual-sub-translated';
+      translatedSpan.textContent = translatedText || 'Translating...';
+      translatedSpan.style.cssText = `
+        background: rgba(8, 8, 8, 0.75);
+        color: #90caf9;
+        padding: 1px 4px;
+        border-radius: 2px;
+        line-height: 1.4;
+        font-style: italic;
+      `;
+      wrapper.appendChild(translatedSpan);
+
+      // If not translated yet, queue it
+      if (!translatedText) {
+        translationQueue.addToQueue(originalText);
+        translationQueue.processQueue().then(() => {
+          // Update translation when ready
+          const newTranslation = sharedTranslationMap.get(translationKey);
+          if (newTranslation && wrapper.contains(translatedSpan)) {
+            translatedSpan.textContent = newTranslation;
+          }
+        });
+      }
+    }
+  }
+
+  /**
+   * Clear subtitle display
+   */
+  function clearYouTubeSubtitle() {
+    const wrapper = document.getElementById('displayed-subtitles-wrapper');
+    if (wrapper) {
+      // Clear using DOM method (avoid innerHTML for Trusted Types)
+      while (wrapper.firstChild) {
+        wrapper.removeChild(wrapper.firstChild);
+      }
+    }
+  }
+
+  // Initial setup
+  if (YouTubeAdapter.isVideoPage()) {
+    setTimeout(initializeYouTubeVideo, 1500);
+  }
+
+  // Handle unified control panel dual sub toggle for YouTube
+  // This listener is inside the YouTube block to access local variables
+  document.addEventListener('dscDualSubToggle', (e) => {
+    const { enabled, platform } = e.detail;
+    if (platform !== 'youtube') return;
+
+    // IMPORTANT: Update dualSubEnabled FIRST before calling displayYouTubeSubtitle
+    // This listener may fire BEFORE the global listener that normally updates dualSubEnabled
+    dualSubEnabled = enabled;
+
+    // Always hide native captions since we show our own overlay with clickable words
+    if (typeof YouTubeAdapter !== 'undefined') {
+      YouTubeAdapter.hideNativeCaptions();
+    }
+
+    // Refresh current subtitle display IMMEDIATELY to show/hide translation line
+    const video = YouTubeAdapter.getVideoElement();
+    if (video && ytCurrentSubtitles.length > 0) {
+      const currentTime = video.currentTime;
+      const currentSub = ytCurrentSubtitles.find(sub =>
+        currentTime >= sub.startTime && currentTime <= sub.endTime
+      );
+      if (currentSub) {
+        displayYouTubeSubtitle(currentSub.text);
+      }
+    }
+
+    // Start batch translation when enabling (for faster lookups)
+    if (enabled && ytCurrentSubtitles.length > 0) {
+      handleBatchTranslation(ytCurrentSubtitles).catch(err => {
+        console.error('DualSubExtension: Batch translation error:', err);
+      });
+    }
+  });
+
+  // Handle unified control panel auto-pause toggle for YouTube
+  // This listener is inside the YouTube block to access ytLastCaptionText
+  document.addEventListener('dscAutoPauseToggle', (e) => {
+    const { enabled, platform } = e.detail;
+    if (platform !== 'youtube') return;
+
+    // IMPORTANT: Update autoPauseEnabled FIRST
+    // This listener may fire BEFORE the global listener that normally updates it
+    autoPauseEnabled = enabled;
+
+    // When ENABLING auto-pause, set ytLastCaptionText to current subtitle
+    // so we don't immediately pause on the current subtitle
+    if (enabled) {
+      const video = YouTubeAdapter.getVideoElement();
+      if (video && ytCurrentSubtitles.length > 0) {
+        const currentTime = video.currentTime;
+        const currentSub = ytCurrentSubtitles.find(sub =>
+          currentTime >= sub.startTime && currentTime <= sub.endTime
+        );
+        if (currentSub) {
+          ytLastCaptionText = currentSub.text;
+        }
+      }
+    } else {
+      // When disabling, reset so next enable will work properly
+      ytLastCaptionText = '';
+    }
+
+    // Also update the legacy auto-pause switch if it exists
+    const legacySwitch = document.getElementById('auto-pause-switch');
+    if (legacySwitch && legacySwitch.checked !== enabled) {
+      legacySwitch.checked = enabled;
+    }
+  });
+}
+
+// ==================================
+// SECTION: HTML5 PLATFORM SUPPORT
+// ==================================
+
+// ==================================
+// SECTION: UNIFIED CONTROL PANEL EVENT LISTENERS
+// ==================================
+
+/* global ControlIntegration, ControlPanel, ControlActions, ControlKeyboard */
+
+// Listen for unified control panel events
+document.addEventListener('dscDualSubToggle', (e) => {
+  const { enabled, platform } = e.detail;
+  dualSubEnabled = enabled;
+
+  // Handle platform-specific dual sub toggle logic directly
+  if (platform === 'yle') {
+    // YLE-specific dual sub toggle logic
+    if (enabled) {
+      const originalSubtitlesWrapper = document.querySelector('[data-testid="subtitles-wrapper"]');
+      if (originalSubtitlesWrapper) {
+        originalSubtitlesWrapper.style.display = 'none';
+        const displayedSubtitlesWrapper = createAndPositionDisplayedSubtitlesWrapper(originalSubtitlesWrapper);
+        displayedSubtitlesWrapper.innerHTML = '';
+        displayedSubtitlesWrapper.style.display = 'flex';
+
+        const originalSubtitlesWrapperSpans = originalSubtitlesWrapper.querySelectorAll('span');
+        if (originalSubtitlesWrapperSpans) {
+          addContentToDisplayedSubtitlesWrapper(displayedSubtitlesWrapper, originalSubtitlesWrapperSpans);
+        }
+        translationQueue.processQueue().catch(console.error);
+      }
+    } else {
+      // When dual sub is disabled, keep showing clickable original text
+      // Just remove the translation spans, don't hide the wrapper
+      const displayedSubtitlesWrapper = document.getElementById('displayed-subtitles-wrapper');
+      if (displayedSubtitlesWrapper) {
+        // Remove only translation spans, keep original clickable text
+        const translationSpans = displayedSubtitlesWrapper.querySelectorAll('.translated-text-span');
+        translationSpans.forEach(span => span.remove());
+      }
+      // Keep original YLE subtitles hidden - we show our clickable version instead
+    }
+  } else if (platform === 'youtube') {
+    // YouTube-specific handling is done inside the YouTube block
+    // where it has access to local variables like ytCurrentSubtitles
+  } else if (platform === 'html5') {
+    // HTML5-specific toggle logic
+    const displayedSubtitlesWrapper = document.getElementById('displayed-subtitles-wrapper');
+    if (!enabled && displayedSubtitlesWrapper) {
+      displayedSubtitlesWrapper.innerHTML = '';
+    }
+  }
+
+  // Also update legacy switch if it exists (for backwards compatibility)
+  const dualSubSwitch = document.getElementById('dual-sub-switch');
+  if (dualSubSwitch && dualSubSwitch.checked !== enabled) {
+    dualSubSwitch.checked = enabled;
+  }
+});
+
+document.addEventListener('dscAutoPauseToggle', (e) => {
+  const { enabled, platform } = e.detail;
+  autoPauseEnabled = enabled;
+  lastSubtitleText = ''; // Reset to allow next subtitle to trigger pause
+});
+
+document.addEventListener('dscSpeedChange', (e) => {
+  const { speed, platform } = e.detail;
+  playbackSpeed = speed;
+});
+
+document.addEventListener('dscSourceLangChange', (e) => {
+  const { language, platform } = e.detail;
+  // Clear translations when language changes
+  sharedTranslationMap.clear();
+  sharedTranslationErrorMap.clear();
+});
+
+// Handle repeat subtitle start - disable auto-pause during repeat
+document.addEventListener('dscRepeatSubtitle', (e) => {
+  console.info('DualSubExtension: Repeat started, disabling auto-pause temporarily');
+  isRepeatingSubtitle = true;
+});
+
+// Handle repeat subtitle complete - re-enable auto-pause
+document.addEventListener('dscRepeatComplete', (e) => {
+  console.info('DualSubExtension: Repeat completed, re-enabling auto-pause');
+  isRepeatingSubtitle = false;
+});
+
+// Update ControlIntegration with subtitle timestamps when they change
+function updateControlIntegrationSubtitles() {
+  if (typeof ControlIntegration !== 'undefined' && ControlIntegration.isInitialized()) {
+    ControlIntegration.setSubtitleTimestamps(subtitleTimestamps);
+  }
+}
+
+// ==================================
+// END UNIFIED CONTROL PANEL SECTION
+// ==================================
+
+if (currentPlatform.name === 'html5') {
+  console.info('DualSubExtension: Initializing HTML5 support');
+
+  // Initialize the HTML5 adapter
+  if (typeof HTML5Adapter !== 'undefined') {
+    HTML5Adapter.initialize();
+  }
+
+  // Initialize unified control panel for HTML5
+  initializeUnifiedControlPanel();
+
+  // Listen for subtitle updates from HTML5 adapter
+  document.addEventListener('html5SubtitleUpdate', (e) => {
+    if (!dualSubEnabled) return;
+
+    const { text } = e.detail;
+    const video = HTML5Adapter.getVideoElement();
+    if (!video) return;
+
+    // Get or create subtitle wrapper
+    const wrapper = HTML5Adapter.createSubtitleDisplayWrapper(video);
+    if (!wrapper) return;
+
+    // Get translation
+    const translationKey = toTranslationKey(text);
+    let translatedText = sharedTranslationMap.get(translationKey) ||
+                         sharedTranslationErrorMap.get(translationKey);
+
+    // Clear and update wrapper
+    wrapper.innerHTML = '';
+
+    // Create Finnish text span with clickable words (font size controlled by CSS)
+    const finnishSpan = createSubtitleSpanWithClickableWords(text, 'dual-sub-original');
+    finnishSpan.style.cssText = `
+      background: rgba(0, 0, 0, 0.75);
+      color: #fff;
+      padding: 4px 12px;
+      border-radius: 4px;
+      line-height: 1.4;
+      margin-bottom: 2px;
+    `;
+    wrapper.appendChild(finnishSpan);
+
+    // Create translation span
+    if (!translatedText) {
+      translatedText = 'Translating...';
+      translationQueue.addToQueue(text);
+      translationQueue.processQueue();
+    }
+
+    const translatedSpan = document.createElement('span');
+    translatedSpan.className = 'dual-sub-translated';
+    translatedSpan.textContent = translatedText;
+    translatedSpan.style.cssText = `
+      background: rgba(0, 0, 0, 0.75);
+      color: #e0e0e0;
+      padding: 4px 12px;
+      border-radius: 4px;
+      line-height: 1.4;
+      font-style: italic;
+    `;
+    wrapper.appendChild(translatedSpan);
+
+    // Check for auto-pause
+    checkAndAutoPause(text);
+  });
+}

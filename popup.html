@@ -4,7 +4,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Finnish Language Learning for YLE</title>
+  <title>Language Learning Subtitles</title>
   <style>
     body {
       width: 340px;
@@ -42,6 +42,31 @@
       line-height: 1.6;
       margin-bottom: 20px;
       color: #b0b0b0;
+    }
+
+    .platforms {
+      background: #1f4a6e;
+      border-radius: 8px;
+      padding: 10px 12px;
+      margin-bottom: 16px;
+      font-size: 13px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .platforms-label {
+      color: #8ec5fc;
+      font-weight: 500;
+    }
+
+    .platform-badge {
+      background: #2d6a9f;
+      color: #e0f0ff;
+      padding: 3px 8px;
+      border-radius: 4px;
+      font-size: 11px;
+      font-weight: 500;
     }
 
     .features {
@@ -121,20 +146,28 @@
 
 <body>
   <div class="container">
-    <h1>Finnish Language Learning for YLE</h1>
-    <div class="subtitle">Learn Finnish by watching YLE Areena with immersive tools!</div>
+    <h1>Language Learning Subtitles</h1>
+    <div class="subtitle">Learn languages by watching videos with immersive tools!</div>
+
+    <div class="platforms">
+      <span class="platforms-label">Supported:</span>
+      <span class="platform-badge">YLE Areena</span>
+      <span class="platform-badge">YouTube</span>
+      <span class="platform-badge">HTML5 Video</span>
+    </div>
+
     <div class="description">
-      Watch Finnish content with dual subtitles, click any word for instant translation,
+      Watch videos with dual subtitles, click any word for instant translation,
       and control playback to study at your own pace.
     </div>
     <div class="features">
       <strong>Features:</strong>
       <ul>
-        <li>Dual subtitles (Finnish + your language)</li>
+        <li>Dual subtitles (original + your language)</li>
         <li>Click any word for popup dictionary</li>
         <li>Auto-pause after each subtitle (P key)</li>
         <li>Skip subtitles with , and . keys</li>
-        <li>Playback speed control (1x - 2x)</li>
+        <li>Playback speed control</li>
         <li>Multiple translation providers (Google, DeepL, Claude, Gemini, Grok)</li>
       </ul>
     </div>
