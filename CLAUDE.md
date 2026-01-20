@@ -515,6 +515,68 @@ this._subtitles = subtitles.map(sub => ({ ...sub }));
 
 ---
 
+## Debugging Methodology (Session 2025-01-20)
+
+### The Regression Cycle Problem
+When fixing bugs, be careful not to fix one issue while creating another. This session had multiple iterations of the "Please wait for subtitles" error because fixes addressed symptoms, not root causes.
+
+### Debugging Checklist for Subtitle Issues
+1. **Check if data is loaded**: Look for console logs showing subtitle count
+2. **Check if data is synced**: Look for `setSubtitles called with X subtitles`
+3. **Check if data persists**: When the feature is triggered, is the data still there?
+4. **Trace the data flow**: Where is the array created? Where is it modified? Who else has a reference?
+
+### Common JavaScript Pitfalls in This Codebase
+
+**1. Array References vs Copies**
+```javascript
+// WRONG - stores reference, clearing source clears this too
+this._subtitles = subtitles;
+
+// CORRECT - stores independent copy
+this._subtitles = subtitles.map(sub => ({ ...sub }));
+```
+
+**2. Clearing Arrays In-Place**
+```javascript
+// This clears ALL references to the array!
+fullSubtitles.length = 0;
+
+// If you did this earlier:
+this._subtitles = fullSubtitles;  // Same reference!
+// Now _subtitles is also empty!
+```
+
+**3. Conditional Guards That Are Too Strict**
+```javascript
+// WRONG - isInitialized() requires UI to be mounted
+if (ControlIntegration.isInitialized()) {
+  ControlIntegration.setSubtitles(data);  // Never called if UI pending!
+}
+
+// CORRECT - setSubtitles just stores data, doesn't need UI
+if (typeof ControlIntegration !== 'undefined') {
+  ControlIntegration.setSubtitles(data);
+}
+```
+
+**4. Cross-Module Variable Access**
+```javascript
+// Variables in contentscript.js aren't automatically visible in control-integration.js
+// Export to window if needed:
+const fullSubtitles = [];
+window.fullSubtitles = fullSubtitles;  // Now accessible as window.fullSubtitles
+```
+
+### Key Questions When Debugging
+1. **Is the data there?** (console.log the array length)
+2. **Is it the same array?** (reference vs copy issue)
+3. **Who else modifies it?** (search for `.length = 0`, `.splice()`, `= []`)
+4. **When is it cleared?** (navigation handlers, cleanup functions)
+5. **Is the timing right?** (async operations, race conditions)
+
+---
+
 ## Common Issues & Debugging
 
 ### Subtitles not showing
