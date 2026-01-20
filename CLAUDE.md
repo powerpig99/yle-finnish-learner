@@ -455,30 +455,45 @@ for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
 }
 ```
 
-### 11. Subtitle Sync Timing for Audio Download
-**Problem:** The "Please wait for subtitles to load" error appears even when subtitles are loaded, because they weren't synced to `ControlIntegration._subtitles` due to timing issues (subtitles load before ControlIntegration initializes, or the sync happens but gets missed).
+### 11. Subtitle Sync Timing for Audio Download (IMPORTANT - REGRESSION PRONE)
+**Problem:** The "Please wait for subtitles to load" error appears even when subtitles are loaded, because they weren't synced to `ControlIntegration._subtitles`.
 
-**Root Cause:** Same as Critical Learning #6 - subtitles must be synced to ControlIntegration. Race conditions between subtitle loading and ControlIntegration initialization can cause the sync to be skipped.
+**Root Cause:** The sync calls had an `isInitialized()` check:
+```javascript
+// WRONG - this was the bug
+if (typeof ControlIntegration !== 'undefined' && ControlIntegration.isInitialized()) {
+  ControlIntegration.setSubtitles(fullSubtitles);  // Never called if panel not mounted!
+}
+```
+`isInitialized()` requires the panel to be MOUNTED, but `setSubtitles()` just stores data - it doesn't need the panel. When panel mount was delayed (retry pending), subtitles never got synced.
 
-**Solution (in `control-integration.js` `_handleDownloadAudio()`):**
-Added fallback sync from the platform-agnostic `fullSubtitles` array:
+**Solution:**
+1. Remove `isInitialized()` check from all `setSubtitles` calls (lines ~528, ~2362 in contentscript.js):
+```javascript
+// CORRECT - just check if ControlIntegration exists
+if (typeof ControlIntegration !== 'undefined') {
+  ControlIntegration.setSubtitles(fullSubtitles);
+}
+```
+
+2. Export `fullSubtitles` to window for cross-module access (line ~339 in contentscript.js):
+```javascript
+const fullSubtitles = [];
+window.fullSubtitles = fullSubtitles;  // For fallback access from control-integration.js
+```
+
+3. Use `window.fullSubtitles` in fallback (in `control-integration.js` `_handleDownloadAudio()`):
 ```javascript
 if (!this._subtitles || this._subtitles.length === 0) {
-  // Fallback: try to sync from global fullSubtitles array
-  // NOTE: Only use fullSubtitles - it's platform-agnostic (used by YLE, YouTube, HTML5)
-  // Do NOT add platform-specific variables to unified modules!
-  if (typeof fullSubtitles !== 'undefined' && fullSubtitles.length > 0) {
-    this.setSubtitles(fullSubtitles);
+  if (typeof window.fullSubtitles !== 'undefined' && window.fullSubtitles.length > 0) {
+    this.setSubtitles(window.fullSubtitles);
   }
 }
 ```
 
-**IMPORTANT:** This fallback only uses `fullSubtitles` because it's the platform-agnostic array that ALL platforms populate. Never add platform-specific variables (like `ytCurrentSubtitles`) to unified control modules - that violates the architecture principle.
+**IMPORTANT:** Only use `fullSubtitles`/`window.fullSubtitles` - it's platform-agnostic. Never add platform-specific variables (like `ytCurrentSubtitles`) to unified control modules.
 
-**Key insight:** Always ensure multiple sync points for subtitles:
-1. When subtitles load (if ControlIntegration is ready)
-2. When ControlIntegration initializes (if subtitles already loaded)
-3. As fallback before features that need subtitles (download, repeat, etc.)
+**Key insight:** `setSubtitles()` just stores data - don't guard it with UI-dependent checks like `isInitialized()`.
 
 ---
 
