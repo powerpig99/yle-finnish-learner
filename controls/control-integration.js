@@ -175,7 +175,10 @@ const ControlIntegration = {
    */
   setSubtitles(subtitles) {
     console.info('DualSubExtension: ControlIntegration.setSubtitles called with', subtitles?.length, 'subtitles');
-    this._subtitles = subtitles;
+    // IMPORTANT: Copy the array, don't reference it!
+    // The source array (fullSubtitles) gets cleared on navigation, which would
+    // also clear _subtitles if we just stored the reference.
+    this._subtitles = subtitles.map(sub => ({ ...sub }));
     // Also update timestamps
     this._subtitleTimestamps = subtitles.map(sub => ({
       time: sub.startTime,
