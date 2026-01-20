@@ -70,14 +70,52 @@ const ControlIntegration = {
       }
     });
 
-    // Mount the panel
-    const element = await this._panel.mount();
+    // Mount the panel with retry logic
+    let element = await this._panel.mount();
 
     if (element) {
       console.info('DualSubExtension: ControlIntegration initialized for platform:', platform);
+    } else {
+      // Schedule retry mounts if initial mount fails
+      this._scheduleRemount();
     }
 
     return this._panel;
+  },
+
+  /**
+   * Schedule retry mounts with increasing delays
+   * @private
+   */
+  _scheduleRemount() {
+    if (this._remountScheduled) return;
+    this._remountScheduled = true;
+
+    const retryDelays = [2000, 4000, 8000]; // Retry at 2s, 4s, 8s
+    let retryIndex = 0;
+
+    const attemptRemount = async () => {
+      if (!this._panel || this._panel.isMounted()) {
+        this._remountScheduled = false;
+        return;
+      }
+
+      console.info(`DualSubExtension: Attempting remount (attempt ${retryIndex + 1}/${retryDelays.length})`);
+      const element = await this._panel.mount();
+
+      if (element) {
+        console.info('DualSubExtension: Remount successful');
+        this._remountScheduled = false;
+      } else if (retryIndex < retryDelays.length - 1) {
+        retryIndex++;
+        setTimeout(attemptRemount, retryDelays[retryIndex]);
+      } else {
+        console.error('DualSubExtension: Could not find mount target after all retries');
+        this._remountScheduled = false;
+      }
+    };
+
+    setTimeout(attemptRemount, retryDelays[0]);
   },
 
 
@@ -85,12 +123,31 @@ const ControlIntegration = {
    * Cleanup and unmount the control panel
    */
   cleanup() {
+    this._remountScheduled = false;
     if (this._panel) {
       this._panel.unmount();
       this._panel = null;
     }
     this._subtitleTimestamps = [];
     this._subtitles = [];
+  },
+
+  /**
+   * Ensure panel is mounted, remount if needed
+   * @returns {Promise<boolean>} - true if mounted successfully
+   */
+  async ensureMounted() {
+    if (this._panel && this._panel.isMounted()) {
+      return true;
+    }
+
+    if (this._panel) {
+      console.info('DualSubExtension: Panel not mounted, attempting remount');
+      const element = await this._panel.mount();
+      return !!element;
+    }
+
+    return false;
   },
 
   /**
