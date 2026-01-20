@@ -146,6 +146,7 @@ GPL v3 (GNU General Public License v3)
 
 ## Acknowledgments
 
+- Originally forked from [yle-dual-sub](https://github.com/anhtumai/yle-dual-sub) by Anh Tu Mai
 - Inspired by [Language Reactor](https://www.languagereactor.com/)
 - [Wiktionary](https://en.wiktionary.org/) for word definitions
 - [YLE Areena](https://areena.yle.fi/) for Finnish content
