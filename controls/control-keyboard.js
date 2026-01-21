@@ -1,27 +1,23 @@
 /**
  * Control Keyboard Module
  *
- * Unified keyboard handler for the control panel.
- * Supports platform-specific configurations (e.g., YouTube needs capture phase).
+ * Keyboard handler for the YLE Areena control panel.
  */
 
 class ControlKeyboard {
   /**
    * Create a keyboard handler
    * @param {Object} options
-   * @param {string} options.platform - Platform identifier ('yle', 'youtube', 'html5')
    * @param {Object} options.callbacks - Callback functions for each action
-   * @param {Object} [options.config] - Platform-specific configuration
    */
   constructor(options) {
-    this.platform = options.platform;
     this.callbacks = options.callbacks || {};
-    this.config = Object.assign({
-      useCapture: false,        // Use capture phase (needed for YouTube)
-      interceptSpace: false,    // Intercept space key for play/pause
-      interceptBrackets: true,  // Intercept [ ] for speed control
+    this.config = {
+      useCapture: false,
+      interceptSpace: false, // Let YLE handle space
+      interceptBrackets: true,
       enabled: true
-    }, options.config || {});
+    };
 
     this._boundKeyDown = this._handleKeyDown.bind(this);
     this._boundKeyUp = this._handleKeyUp.bind(this);
@@ -51,13 +47,11 @@ class ControlKeyboard {
   attach() {
     if (this._attached) return;
 
-    const useCapture = this.config.useCapture || this.platform === 'youtube';
-
-    document.addEventListener('keydown', this._boundKeyDown, useCapture);
-    document.addEventListener('keyup', this._boundKeyUp, useCapture);
+    document.addEventListener('keydown', this._boundKeyDown, false);
+    document.addEventListener('keyup', this._boundKeyUp, false);
 
     this._attached = true;
-    console.info('DualSubExtension: Keyboard handler attached for platform:', this.platform);
+    console.info('DualSubExtension: Keyboard handler attached for YLE');
   }
 
   /**
@@ -66,10 +60,8 @@ class ControlKeyboard {
   detach() {
     if (!this._attached) return;
 
-    const useCapture = this.config.useCapture || this.platform === 'youtube';
-
-    document.removeEventListener('keydown', this._boundKeyDown, useCapture);
-    document.removeEventListener('keyup', this._boundKeyUp, useCapture);
+    document.removeEventListener('keydown', this._boundKeyDown, false);
+    document.removeEventListener('keyup', this._boundKeyUp, false);
 
     this._attached = false;
     console.info('DualSubExtension: Keyboard handler detached');
@@ -223,37 +215,15 @@ class ControlKeyboard {
   }
 
   /**
-   * Get the default configuration for a platform
-   * @param {string} platform - Platform identifier
+   * Get the default configuration for YLE
    * @returns {Object} - Configuration object
    */
-  static getDefaultConfig(platform) {
-    switch (platform) {
-      case 'youtube':
-        return {
-          useCapture: true,     // YouTube needs capture phase to intercept
-          interceptSpace: true, // Take over space for play/pause
-          interceptBrackets: true
-        };
-      case 'yle':
-        return {
-          useCapture: false,
-          interceptSpace: false, // Let YLE handle space
-          interceptBrackets: true
-        };
-      case 'html5':
-        return {
-          useCapture: false,
-          interceptSpace: true,
-          interceptBrackets: true
-        };
-      default:
-        return {
-          useCapture: false,
-          interceptSpace: false,
-          interceptBrackets: true
-        };
-    }
+  static getDefaultConfig() {
+    return {
+      useCapture: false,
+      interceptSpace: false, // Let YLE handle space
+      interceptBrackets: true
+    };
   }
 }
 

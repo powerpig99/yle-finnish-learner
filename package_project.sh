@@ -7,8 +7,10 @@ zip -r yle-dual-sub-extension.zip \
   types.js \
   contentscript.js \
   inject.js \
-  injected.js \
   styles.css \
   popup.html \
   popup.js \
+  controls/ \
+  platforms/ \
+  lib/ \
   extension-options-page/dist/

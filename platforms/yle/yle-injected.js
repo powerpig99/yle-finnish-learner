@@ -1005,7 +1005,7 @@ const LanguageDetector = {
         // Dispatch event for content script
         const event = new CustomEvent('yleSourceLanguageDetected', {
           bubbles: true,
-          detail: { language: detected, platform: 'yle' }
+          detail: { language: detected }
         });
         document.dispatchEvent(event);
       }

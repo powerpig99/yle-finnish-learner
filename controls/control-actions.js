@@ -1,8 +1,7 @@
 /**
  * Control Actions Module
  *
- * Shared action handlers for the unified control panel.
- * These are platform-agnostic operations that work with any video element.
+ * Action handlers for the YLE Areena control panel.
  */
 
 const ControlActions = {
@@ -18,30 +17,19 @@ const ControlActions = {
   _repeatCheckInterval: null,
 
   /**
-   * Get the current video element based on platform
-   * @param {string} platform - 'yle' | 'youtube' | 'html5'
+   * Get the current video element
    * @returns {HTMLVideoElement|null}
    */
-  getVideoElement(platform) {
-    switch (platform) {
-      case 'yle':
-        return document.querySelector('video');
-      case 'youtube':
-        return document.querySelector('video.html5-main-video') || document.querySelector('video');
-      case 'html5':
-        return document.querySelector('video');
-      default:
-        return document.querySelector('video');
-    }
+  getVideoElement() {
+    return document.querySelector('video');
   },
 
   /**
    * Toggle play/pause on the video
-   * @param {string} platform - Platform identifier
    * @returns {boolean} - New paused state
    */
-  togglePlayPause(platform) {
-    const video = this.getVideoElement(platform);
+  togglePlayPause() {
+    const video = this.getVideoElement();
     if (!video) return true;
 
     if (video.paused) {
@@ -56,10 +44,9 @@ const ControlActions = {
   /**
    * Skip to the previous subtitle
    * @param {Array<{time: number, text: string}>} subtitleTimestamps - Array of subtitle timestamps
-   * @param {string} platform - Platform identifier
    */
-  skipToPreviousSubtitle(subtitleTimestamps, platform) {
-    const video = this.getVideoElement(platform);
+  skipToPreviousSubtitle(subtitleTimestamps) {
+    const video = this.getVideoElement();
     if (!video) return;
 
     this._isSkipping = true;
@@ -86,10 +73,9 @@ const ControlActions = {
   /**
    * Skip to the next subtitle
    * @param {Array<{time: number, text: string}>} subtitleTimestamps - Array of subtitle timestamps
-   * @param {string} platform - Platform identifier
    */
-  skipToNextSubtitle(subtitleTimestamps, platform) {
-    const video = this.getVideoElement(platform);
+  skipToNextSubtitle(subtitleTimestamps) {
+    const video = this.getVideoElement();
     if (!video) return;
 
     this._isSkipping = true;
@@ -114,11 +100,10 @@ const ControlActions = {
   /**
    * Repeat the current subtitle from start to current position
    * @param {Array<{startTime: number, endTime: number, text: string}>} subtitles - Array of subtitles with timing
-   * @param {string} platform - Platform identifier
    * @param {Function} onRepeatComplete - Callback when repeat finishes
    */
-  repeatCurrentSubtitle(subtitles, platform, onRepeatComplete) {
-    const video = this.getVideoElement(platform);
+  repeatCurrentSubtitle(subtitles, onRepeatComplete) {
+    const video = this.getVideoElement();
     if (!video) {
       console.warn('DualSubExtension: Repeat - no video element found');
       if (onRepeatComplete) onRepeatComplete(); // Clear repeat flag
@@ -241,10 +226,9 @@ const ControlActions = {
   /**
    * Set playback speed
    * @param {number} speed - Playback speed (0.5 to 2.0)
-   * @param {string} platform - Platform identifier
    */
-  setPlaybackSpeed(speed, platform) {
-    const video = this.getVideoElement(platform);
+  setPlaybackSpeed(speed) {
+    const video = this.getVideoElement();
     if (!video) return;
 
     video.playbackRate = speed;
@@ -253,22 +237,20 @@ const ControlActions = {
 
   /**
    * Get current playback speed
-   * @param {string} platform - Platform identifier
    * @returns {number}
    */
-  getPlaybackSpeed(platform) {
-    const video = this.getVideoElement(platform);
+  getPlaybackSpeed() {
+    const video = this.getVideoElement();
     return video ? video.playbackRate : 1;
   },
 
   /**
    * Adjust playback speed by increment
    * @param {number} increment - Amount to change speed (e.g., 0.25 or -0.25)
-   * @param {string} platform - Platform identifier
    * @returns {number} - New playback speed
    */
-  adjustPlaybackSpeed(increment, platform) {
-    const video = this.getVideoElement(platform);
+  adjustPlaybackSpeed(increment) {
+    const video = this.getVideoElement();
     if (!video) return 1;
 
     let newSpeed = Math.round((video.playbackRate + increment) * 100) / 100;
@@ -289,26 +271,13 @@ const ControlActions = {
   },
 
   /**
-   * Focus the video player element
-   * @param {string} platform - Platform identifier
+   * Focus the YLE video player element
    */
-  focusPlayer(platform) {
-    switch (platform) {
-      case 'yle':
-        const playerUI = document.querySelector('[class*="PlayerUI__UI"]');
-        if (playerUI) {
-          playerUI.setAttribute('tabindex', '0');
-          playerUI.focus();
-        }
-        break;
-      case 'youtube':
-        const ytPlayer = document.querySelector('#movie_player');
-        if (ytPlayer) ytPlayer.focus();
-        break;
-      case 'html5':
-        const video = this.getVideoElement('html5');
-        if (video) video.focus();
-        break;
+  focusPlayer() {
+    const playerUI = document.querySelector('[class*="PlayerUI__UI"]');
+    if (playerUI) {
+      playerUI.setAttribute('tabindex', '0');
+      playerUI.focus();
     }
   },
 

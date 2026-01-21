@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "Language Learning Subtitles",
-  "version": "4.0.1",
-  "description": "Learn languages with dual subtitles, popup dictionary, and playback controls on YLE, YouTube, and HTML5 videos.",
+  "name": "YLE Language Learning Subtitles",
+  "version": "5.0.0",
+  "description": "Learn languages with dual subtitles, popup dictionary, and playback controls on YLE Areena.",
   "icons": {
     "16": "icons/icon.png",
     "48": "icons/icon.png",
@@ -17,7 +17,6 @@
       "run_at": "document_end",
       "js": [
         "lib/lamejs.min.js",
-        "platforms/platform-base.js",
         "platforms/yle/yle-adapter.js",
         "controls/control-icons.js",
         "controls/control-actions.js",
@@ -35,59 +34,6 @@
         "inject.js"
       ],
       "css": ["styles.css"]
-    },
-    {
-      "matches": [
-        "https://www.youtube.com/*",
-        "https://youtube.com/*"
-      ],
-      "run_at": "document_end",
-      "js": [
-        "lib/lamejs.min.js",
-        "platforms/platform-base.js",
-        "platforms/youtube/youtube-adapter.js",
-        "controls/control-icons.js",
-        "controls/control-actions.js",
-        "controls/control-keyboard.js",
-        "controls/audio-filters.js",
-        "controls/audio-encoder.js",
-        "controls/audio-recorder.js",
-        "controls/audio-download-ui.js",
-        "controls/control-panel.js",
-        "controls/control-integration.js",
-        "database.js",
-        "utils.js",
-        "contentscript.js",
-        "inject.js"
-      ],
-      "css": ["styles.css"]
-    },
-    {
-      "matches": ["<all_urls>"],
-      "exclude_matches": [
-        "https://areena.yle.fi/*",
-        "https://www.youtube.com/*",
-        "https://youtube.com/*"
-      ],
-      "run_at": "document_end",
-      "js": [
-        "lib/lamejs.min.js",
-        "platforms/platform-base.js",
-        "platforms/html5/html5-adapter.js",
-        "controls/control-icons.js",
-        "controls/control-actions.js",
-        "controls/control-keyboard.js",
-        "controls/audio-filters.js",
-        "controls/audio-encoder.js",
-        "controls/audio-recorder.js",
-        "controls/audio-download-ui.js",
-        "controls/control-panel.js",
-        "controls/control-integration.js",
-        "database.js",
-        "utils.js",
-        "contentscript.js"
-      ],
-      "css": ["styles.css"]
     }
   ],
   "host_permissions": [
@@ -96,22 +42,17 @@
     "https://translate.googleapis.com/*",
     "https://api.anthropic.com/*",
     "https://generativelanguage.googleapis.com/*",
-    "https://api.x.ai/*",
-    "https://www.youtube.com/*"
+    "https://api.x.ai/*"
   ],
   "permissions": ["storage", "downloads"],
   "web_accessible_resources": [
     {
       "resources": ["platforms/yle/yle-injected.js"],
       "matches": ["https://areena.yle.fi/*"]
-    },
-    {
-      "resources": ["platforms/youtube/youtube-injected.js"],
-      "matches": ["https://www.youtube.com/*", "https://youtube.com/*"]
     }
   ],
   "action": {
-    "default_title": "Language Learning Subtitles",
+    "default_title": "YLE Language Learning Subtitles",
     "default_popup": "popup.html",
     "default_icon": {
       "16": "icons/icon.png",

@@ -1,530 +1,227 @@
-/* Header Section */
-.header-section {
-  width: 100%;
+/* Settings Page - Minimalistic Design */
+
+* {
+  box-sizing: border-box;
+}
+
+.settings-page {
+  min-height: 100vh;
+  background: #121212;
+  color: #e5e5e5;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+}
+
+/* Header */
+.settings-header {
   background: #1a1a1a;
   padding: 24px 32px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-  margin: 0px;
 }
 
-.header-section h1 {
+.settings-header h1 {
   margin: 0;
-  color: #ffffff;
   font-size: 24px;
   font-weight: 600;
 }
 
-/* Setting Section */
-
-.setting-card {
-  max-width: 900px;
+/* Content */
+.settings-content {
+  max-width: 600px;
   margin: 0 auto;
   padding: 32px 24px;
-  flex-direction: column;
-  align-items: center;
-  font-size: 18px;
 }
 
-.setting-card__accordion {
-  background: #1a1a1a;
-  border-radius: 12px;
-  margin-bottom: 16px;
-  overflow: hidden;
-  border: 1px solid rgba(255, 255, 255, 0.05);
-  transition: border-color 0.3s;
-  width: 800px;
+.settings-section {
+  margin-bottom: 8px;
 }
 
-.setting-card__accordion:hover {
-  border-color: rgba(59, 130, 246, 0.3);
-}
-
-.setting-card__accordion-header {
-  padding: 20px 24px;
-  cursor: pointer;
-  background: transparent;
-  border: none;
-  width: 100%;
-  text-align: left;
-  font-size: 20px;
+.settings-section h2 {
+  font-size: 16px;
   font-weight: 500;
-  color: #ffffff;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  transition: background 0.3s;
-}
-
-.setting-card__accordion-header:hover {
-  background: rgba(255, 255, 255, 0.03);
-}
-
-.setting-card__accordion-icon {
-  transition: transform 0.3s;
-  color: #3b82f6;
-}
-
-.setting-card__accordion.active .setting-card__accordion-icon {
-  transform: rotate(180deg);
-}
-
-.setting-card__accordion-content {
-  max-height: 0;
-  overflow: hidden;
-  transition: max-height 0.3s ease;
-}
-
-.setting-card__accordion-content-inner {
-  padding: 0 30px 30px;
   color: #9ca3af;
-  line-height: 1.6;
+  margin: 0 0 16px 0;
 }
 
-.setting-card__accordion.active .setting-card__accordion-content {
-  max-height: 800px;
-  overflow-y: scroll;
+.divider {
+  border: none;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  margin: 24px 0;
 }
 
-.setting-card__title {
-  color: #6b7280;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  margin-top: 16px;
-  margin-bottom: 12px;
-  font-weight: 600;
-}
-
-.setting-card__description {
-  color: #9ca3af;
-  line-height: 1.6;
-  margin-top: 12px;
-  margin-bottom: 30px;
-  font-weight: 400;
-}
-
-.setting-card__description a {
-  color: #3b82f6;
-  text-decoration: none;
-  transition: color 0.2s;
-}
-
-.setting-card__description a:hover {
-  color: #60a5fa;
-  text-decoration: underline;
-}
-
-/* Add token form section*/
-
-.add-token-form {
-  border-top: 2px solid #404040;
-  padding-top: 48px;
-  margin-top: 48px;
+/* Provider Radio Buttons */
+.provider-list {
   display: flex;
   flex-direction: column;
-  gap: 22px;
+  gap: 8px;
 }
 
-.add-token-form__input-field {
-  background: #2a2a2a;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 12px;
+.provider-option {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  background: #1a1a1a;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.provider-option:hover {
+  background: #222;
+}
+
+.provider-option input[type="radio"] {
+  width: 18px;
+  height: 18px;
+  accent-color: #3b82f6;
+  cursor: pointer;
+}
+
+.provider-name {
+  font-weight: 500;
+  color: #e5e5e5;
+}
+
+.provider-desc {
+  color: #6b7280;
+  font-size: 14px;
+  margin-left: auto;
+}
+
+/* API Key Input */
+.api-key-section {
+  margin-top: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.api-key-input {
+  background: #1a1a1a;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 8px;
   padding: 12px 16px;
   color: #e5e5e5;
-  font-size: 16px;
+  font-size: 15px;
+  width: 100%;
 }
 
-.add-token-form__input-field:focus {
+.api-key-input:focus {
   outline: none;
   border-color: #3b82f6;
 }
 
-.add-token-form__button {
-  background: #3b82f6;
-  color: white;
-  border: none;
+.api-key-link {
+  color: #60a5fa;
+  font-size: 14px;
+  text-decoration: none;
+}
+
+.api-key-link:hover {
+  text-decoration: underline;
+}
+
+/* Language Dropdown */
+.language-dropdown {
+  background: #1a1a1a;
+  border: 1px solid rgba(255, 255, 255, 0.15);
   border-radius: 8px;
-  padding: 10px 20px;
-  font-size: 16px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: background 0.3s;
-}
-
-.add-token-form__button:hover {
-  background: #2563eb;
-}
-
-.add-token-form__input-label {
-  display: block;
+  padding: 12px 16px;
   color: #e5e5e5;
-  font-weight: 500;
-  margin-bottom: 8px;
+  font-size: 15px;
+  width: 100%;
+  cursor: pointer;
 }
 
-.add-token-form__radio-group {
+.language-dropdown:focus {
+  outline: none;
+  border-color: #3b82f6;
+}
+
+/* Size Slider */
+.slider-container {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.slider-label {
+  color: #6b7280;
+  font-size: 14px;
+  font-weight: 500;
+  min-width: 24px;
+  text-align: center;
+}
+
+.size-slider {
+  flex: 1;
+  height: 6px;
+  -webkit-appearance: none;
+  appearance: none;
+  background: #333;
+  border-radius: 3px;
+  cursor: pointer;
+}
+
+.size-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 18px;
+  height: 18px;
+  background: #3b82f6;
+  border-radius: 50%;
+  cursor: pointer;
+  transition: transform 0.15s;
+}
+
+.size-slider::-webkit-slider-thumb:hover {
+  transform: scale(1.15);
+}
+
+.size-slider::-moz-range-thumb {
+  width: 18px;
+  height: 18px;
+  background: #3b82f6;
+  border: none;
+  border-radius: 50%;
+  cursor: pointer;
+}
+
+.slider-value {
+  text-align: center;
+  color: #9ca3af;
+  font-size: 14px;
+  margin-top: 8px;
+}
+
+/* Cache Management */
+.cache-buttons {
+  display: flex;
+  gap: 16px;
+}
+
+.cache-item {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 6px;
 }
 
-.add-token-form__radio-option {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 14px 16px;
-  background: #2a2a2a;
+.clear-cache-btn {
+  background: rgba(239, 68, 68, 0.15);
+  border: 1px solid rgba(239, 68, 68, 0.3);
   border-radius: 8px;
+  padding: 10px 16px;
+  color: #f87171;
+  font-size: 14px;
   cursor: pointer;
-  border: 2px solid transparent;
-  transition: all 0.3s;
-  position: relative;
+  transition: background 0.2s;
 }
 
-.add-token-form__radio-option:hover {
-  background: #333;
-  border-color: rgba(59, 130, 246, 0.3);
+.clear-cache-btn:hover {
+  background: rgba(239, 68, 68, 0.25);
 }
 
-.add-token-form__radio-option input[type="radio"] {
-  width: 20px;
-  height: 20px;
-  cursor: pointer;
-  accent-color: #3b82f6;
-  margin: 0;
-}
-
-.add-token-form__radio-option:has(input:checked) {
-  background: rgba(59, 130, 246, 0.1);
-  border-color: #3b82f6;
-}
-
-.add-token-form__radio-content {
-  flex: 1;
-}
-
-.add-token-form__radio-title {
-  color: #e5e5e5;
-  font-weight: 500;
-  font-size: 16px;
-  margin-bottom: 2px;
-}
-
-.add-token-form__radio-description {
-  color: #6b7280;
-  font-size: 14px;
-}
-
-/* Token Cards */
-
-.token-card {
-  background: #2a2a2a;
-  border-radius: 12px;
-  padding: 20px;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  border: 2px solid transparent;
-}
-
-.token-card:hover {
-  background: #333;
-  border-color: rgba(59, 130, 246, 0.3);
-}
-
-.token-card-selected {
-  border-color: #3b82f6;
-  box-shadow: 0 0 20px rgba(59, 130, 246, 0.2);
-  color: #e5e5e5;
-}
-
-.token-card__content {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-}
-
-.token-card__header {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  margin-bottom: 12px;
-}
-
-.token-card__checkbox {
-  width: 20px;
-  height: 20px;
-  border-radius: 50%;
-  border: 2px solid #6b7280;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-}
-
-.token-card__checkbox-selected {
-  border-color: #3b82f6;
-  background: #3b82f6;
-}
-
-.token-card__check-icon {
-  color: white;
-}
-
-.token-card__details {
-  flex: 1;
-  min-width: 0;
-}
-
-.token-card__token-type {
-  color: white;
-  font-weight: 500;
-  margin: 0 0 4px 0;
-  font-size: 16px;
-}
-
-.token-card__token-key {
-  color: #9ca3af;
-  font-size: 14px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  margin: 0;
-}
-
-.token-card__usage-container {
-  margin-left: 32px;
-}
-
-.token-card__usage-stats {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 8px;
-}
-
-.token-card__usage-text {
-  color: #d1d5db;
-  font-size: 14px;
-}
-
-.token-card__usage-percentage {
-  color: #9ca3af;
-  font-size: 12px;
-}
-
-.token-card__progress-bar {
-  width: 100%;
-  background: #4b5563;
-  border-radius: 9999px;
-  height: 8px;
-  overflow: hidden;
-  margin-bottom: 8px;
-}
-
-.token-card__progress-fill {
-  height: 100%;
-  transition: all 0.3s ease;
-}
-
-.token-card__progress-green {
-  background: #10b981;
-}
-
-.token-card__progress-yellow {
-  background: #eab308;
-}
-
-.token-card__progress-red {
-  background: #ef4444;
-}
-
-.token-card__last-checked-text {
-  color: #6b7280;
-  font-size: 12px;
-  margin: 0;
-}
-
-.token-card__action-buttons {
-  display: flex;
-  gap: 8px;
-  margin-left: 16px;
-}
-
-.token-card__button {
-  padding: 8px 16px;
-  border: none;
-  border-radius: 8px;
-  font-size: 14px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: background-color 0.2s ease;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  color: white;
-  font-family: inherit;
-}
-
-.token-card__check-usage-button {
-  background: #2563eb;
-}
-
-.token-card__check-usage-button:hover {
-  background: #1d4ed8;
-}
-
-.token-card__remove_button {
-  background: #dc2626;
-}
-
-.token-card__remove_button:hover {
-  background: #b91c1c;
-}
-
-/* Deactivated Token Card */
-
-.token-card-deactivated {
-  border-color: #b91c1c;
-  cursor: default;
-}
-
-.token-card-deactivated:hover {
-  border-color: #dc2626;
-}
-
-.token-card__warning-icon {
-  color: #f59e0b;
-  flex-shrink: 0;
-}
-
-.token-card__error-message {
-  margin-left: 36px;
-  margin-bottom: 12px;
-  padding: 12px 16px;
-  background: rgba(220, 38, 38, 0.15);
-  border-radius: 8px;
-  display: flex;
-  align-items: flex-start;
-  gap: 12px;
-}
-
-.token-card__error-icon {
-  font-size: 16px;
-  flex-shrink: 0;
-  line-height: 1.5;
-}
-
-.token-card__error-text {
-  color: #fca5a5;
-  font-size: 14px;
-  line-height: 1.5;
-}
-
-.token-card__button-disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-  background: #4b5563 !important;
-}
-
-.token-card__button-disabled:hover {
-  background: #4b5563 !important;
-}
-
-.token-card-deactivated .token-card__token-key {
-  font-family: "Courier New", Courier, monospace;
-  letter-spacing: 0.5px;
-}
-
-/* Help Section */
-
-.token-management-setting-card__help-section {
-  margin: 20px 0;
-  border: 1px solid #404040;
-  border-radius: 8px;
-  overflow: hidden;
-  background: #2a2a2a;
-  max-width: 750px;
-  width: 100%;
-  box-sizing: border-box;
-}
-
-.token-management-setting-card__help-section-button {
-  width: 100%;
-  padding: 12px 16px;
-  background: #333333;
-  border: none;
-  cursor: pointer;
-  text-align: left;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  font-size: 16px;
-  font-weight: 600;
-  color: #e0e0e0;
-}
-
-.token-management-setting-card__help-section-arrow {
-  transform: rotate(0deg);
-  transition: transform 0.2s;
-  flex-shrink: 0;
-  margin-left: 8px;
-}
-
-.token-management-setting-card__help-section-arrow--open {
-  transform: rotate(180deg);
-}
-
-.token-management-setting-card__help-section-content {
-  padding: 16px;
-  background: #2a2a2a;
-  font-size: 15px;
-  line-height: 1.6;
-  color: #b0b0b0;
-  border-top: 1px solid #404040;
-  word-wrap: break-word;
-  overflow-wrap: break-word;
-}
-
-.token-management-setting-card__help-section-content strong {
-  color: #e0e0e0;
-}
-
-.token-management-setting-card__help-section-paragraph {
-  word-wrap: break-word;
-  overflow-wrap: break-word;
-}
-
-.token-management-setting-card__help-section-list {
-  padding-left: 24px;
-}
-
-.token-management-setting-card__help-section-link {
-  color: #3b82f6;
-}
-
-.token-management-setting-card__help-section-small {
-  color: #888888;
-}
-
-.token-management-setting-card__help-section-footer {
-  font-size: 14px;
-}
-
-.token-management-setting-card__help-section code {
-  background: #1a1a1a;
-  padding: 2px 6px;
-  border-radius: 4px;
-  font-family: "Courier New", Courier, monospace;
+.cache-count {
   font-size: 13px;
-  color: #10b981;
-  border: 1px solid #404040;
-}
-
-.language-select-dropdown {
-  background: #2a2a2a;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 12px;
-  color: #e5e5e5;
-  font-size: 16px;
-  padding: 12px;
-  cursor: pointer;
+  color: #6b7280;
+  text-align: center;
 }

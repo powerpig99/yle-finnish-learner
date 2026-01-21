@@ -334,7 +334,7 @@ const YLEAdapter = {
     // Dispatch event for other modules to react
     const event = new CustomEvent('yleSourceLanguageDetected', {
       bubbles: true,
-      detail: { language: langCode, platform: 'yle' }
+      detail: { language: langCode }
     });
     document.dispatchEvent(event);
   },

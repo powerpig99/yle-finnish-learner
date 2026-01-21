@@ -104,6 +104,8 @@ let toastShown = false;
 // eslint-disable-next-line no-unused-vars
 function showExtensionInvalidatedToast() {
   if (toastShown) return;
+  // Guard: Don't run in service worker (no document)
+  if (typeof document === 'undefined') return;
   toastShown = true;
 
   const toast = document.createElement('div');

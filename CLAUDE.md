@@ -4,7 +4,7 @@
 
 > **TEST ON CHROME:** Always test changes directly in Chrome browser. Don't assume code works - verify it:
 > 1. Reload extension at `chrome://extensions`
-> 2. Refresh the target page (YLE Areena, YouTube, etc.)
+> 2. Refresh the target page (YLE Areena)
 > 3. Verify the feature works visually
 > 4. Check browser console for errors/logs
 
@@ -19,7 +19,9 @@
 ---
 
 ## Project Overview
-A Chrome extension (v4.0.0, Manifest v3) that provides dual subtitles (original + translation), popup dictionary, and playback controls for YLE Areena, YouTube, and generic HTML5 video players.
+A Chrome extension (v4.1.0, Manifest v3) that provides dual subtitles (original + translation), popup dictionary, and playback controls for YLE Areena (Finnish public broadcasting).
+
+**Supported Platform:** YLE Areena only (`https://areena.yle.fi/*`)
 
 ## Directory Structure
 
@@ -27,38 +29,30 @@ A Chrome extension (v4.0.0, Manifest v3) that provides dual subtitles (original 
 yle-language-reactor/
 ├── Root files (main entry points)
 │   ├── manifest.json         # Chrome Extension Manifest v3
-│   ├── background.js         # Service worker for translation handling (~888 lines)
-│   ├── contentscript.js      # Main content script (~2942 lines)
-│   ├── inject.js             # Platform detector & script injector (~40 lines)
-│   ├── injected.js           # WebVTT parser for YLE (~1018 lines)
-│   ├── database.js           # IndexedDB word translation cache (~652 lines)
-│   ├── utils.js              # Storage utilities (~60 lines)
-│   ├── styles.css            # Unified styles with `dsc-*` prefix (~1320 lines)
+│   ├── background.js         # Service worker for translation handling
+│   ├── contentscript.js      # Main content script (YLE-specific)
+│   ├── inject.js             # Script injector for YLE
+│   ├── database.js           # IndexedDB word translation cache
+│   ├── utils.js              # Storage utilities
+│   ├── styles.css            # Unified styles with `dsc-*` prefix
 │   ├── popup.js              # Minimal popup handler
 │   └── types.js              # Type definitions
 │
-├── controls/                 # Unified control panel modules (~3700 lines total)
-│   ├── control-panel.js      # Main ControlPanel class (~547 lines)
-│   ├── control-actions.js    # Platform-agnostic action handlers (~360 lines)
-│   ├── control-keyboard.js   # Unified keyboard handler (~263 lines)
-│   ├── control-integration.js # Bridge to contentscript (~1241 lines)
-│   ├── control-icons.js      # SVG icon definitions (~141 lines)
-│   ├── audio-recorder.js     # Web Audio API recording (~539 lines)
-│   ├── audio-encoder.js      # MP3 encoding using lamejs (~291 lines)
-│   ├── audio-filters.js      # Speech vs non-verbal detection (~215 lines)
-│   ├── audio-download-ui.js  # Download dialog UI (~334 lines)
-│   └── screen-recorder.js    # Screen capture recording for DRM (~362 lines)
+├── controls/                 # Control panel modules
+│   ├── control-panel.js      # Main ControlPanel class
+│   ├── control-actions.js    # Action handlers (skip/repeat/speed)
+│   ├── control-keyboard.js   # Keyboard handler
+│   ├── control-integration.js # Bridge to contentscript
+│   ├── control-icons.js      # SVG icon definitions
+│   ├── audio-recorder.js     # Web Audio API recording
+│   ├── audio-encoder.js      # MP3 encoding using lamejs
+│   ├── audio-filters.js      # Speech vs non-verbal detection
+│   ├── audio-download-ui.js  # Download dialog UI
+│   └── screen-recorder.js    # Screen capture recording for DRM
 │
-├── platforms/                # Platform-specific adapters
-│   ├── platform-base.js      # Abstract base class
-│   ├── yle/
-│   │   ├── yle-adapter.js    # YLE Areena implementation
-│   │   └── yle-injected.js   # Page-context VTT interception
-│   ├── youtube/
-│   │   ├── youtube-adapter.js    # YouTube implementation
-│   │   └── youtube-injected.js   # Page-context timedtext API interception
-│   └── html5/
-│       └── html5-adapter.js  # Generic HTML5 video support
+├── platforms/yle/            # YLE-specific adapter
+│   ├── yle-adapter.js        # YLE Areena implementation
+│   └── yle-injected.js       # Page-context VTT interception
 │
 ├── extension-options-page/   # React-based settings UI
 │   ├── src/                  # React source
@@ -74,133 +68,48 @@ yle-language-reactor/
 
 ## Architecture
 
-### GUIDING PRINCIPLE: Unified Interface, Platform-Specific Translation Only
-
-**CRITICAL:** Keep a unified interface and controls across ALL platforms. Only adjust the translation/adapter layers, NOT the control logic.
-
-### GUIDING PRINCIPLE: Bug Fixes Must Respect the Architecture
-
-**BEFORE FIXING ANY BUG, ASK:**
-
-1. **Where does this fix belong?**
-   - Is it a UI/control issue? → Fix in unified `controls/` modules
-   - Is it a platform-specific issue? → Fix in platform adapter or platform section of contentscript.js
-   - Is it a translation/subtitle issue? → Check if it affects all platforms or just one
-
-2. **Am I adding platform-specific code to unified modules?**
-   - ❌ NEVER add `ytCurrentSubtitles`, `YouTubeAdapter`, or YouTube-specific logic to `control-integration.js`, `control-panel.js`, `control-actions.js`
-   - ❌ NEVER add YLE-specific selectors or logic to unified modules
-   - ✅ Use platform-agnostic variables like `fullSubtitles`, `subtitleTimestamps`
-   - ✅ Use the adapter pattern: call `ControlActions.getVideoElement(platform)` not `document.querySelector('video.html5-main-video')`
-
-3. **Will this fix work on ALL platforms?**
-   - If fixing in unified code, test on YLE, YouTube, AND HTML5
-   - If it only works on one platform, it belongs in platform-specific code
-
-**WRONG approach:**
-```javascript
-// In control-integration.js (UNIFIED)
-if (typeof ytCurrentSubtitles !== 'undefined') {  // ❌ YouTube-specific!
-  this.setSubtitles(ytCurrentSubtitles);
-}
-```
-
-**RIGHT approach:**
-```javascript
-// In control-integration.js (UNIFIED)
-if (typeof fullSubtitles !== 'undefined') {  // ✅ Platform-agnostic
-  this.setSubtitles(fullSubtitles);
-}
-```
-
-```
-┌─────────────────────────────────────────────────────────────┐
-│                    UNIFIED LAYER (ONE implementation)       │
-│  ┌─────────────┐  ┌─────────────┐  ┌──────────────────┐    │
-│  │ControlPanel │  │ControlActions│  │ControlIntegration│   │
-│  │  (UI)       │  │ (skip/repeat │  │   (bridge)       │    │
-│  │             │  │  /autopause) │  │                  │    │
-│  └─────────────┘  └─────────────┘  └──────────────────┘    │
-└─────────────────────────────────────────────────────────────┘
-                              │
-                    Events & Callbacks
-                              │
-┌─────────────────────────────────────────────────────────────┐
-│              TRANSLATION LAYER (platform-specific)          │
-│  ┌──────────┐    ┌───────────────┐    ┌─────────────┐      │
-│  │YLE Adapter│    │YouTube Adapter│    │HTML5 Adapter│      │
-│  │-getVideo()│    │-getVideo()    │    │-getVideo()  │      │
-│  │-mount()   │    │-mount()       │    │-mount()     │      │
-│  │-subtitles │    │-subtitles     │    │-subtitles   │      │
-│  └──────────┘    └───────────────┘    └─────────────┘      │
-└─────────────────────────────────────────────────────────────┘
-```
-
-**Rules:**
-1. **ControlActions** is the ONLY place for action logic (skip, repeat, speed, auto-pause)
-2. **ControlIntegration** is the ONLY bridge between controls and contentscript
-3. **Platform adapters** ONLY provide: video element, subtitle data, mount points, keyboard config
-4. **contentscript.js** should NOT have platform-specific control logic
-5. **Fix once, works everywhere** - if you fix a bug, it should work on ALL platforms automatically
-
-### Manifest Configuration (v3)
-
-| Platform | URL Match | Adapters Loaded | Special Handling |
-|----------|-----------|-----------------|------------------|
-| **YLE** | `https://areena.yle.fi/*` | YLE adapter + screen recorder | inject.js for VTT interception |
-| **YouTube** | `https://www.youtube.com/*` | YouTube adapter | inject.js for timedtext interception |
-| **HTML5** | `<all_urls>` (excluded YLE/YouTube) | HTML5 adapter | No inject.js needed |
-
 ### Control Modules Detail
 
 **control-panel.js** - Main ControlPanel class
-- Single implementation for all platforms
 - Manages UI state (dualSubEnabled, autoPauseEnabled, speed, language)
-- Handles mount/unmount to platform-specific locations
+- Handles mount/unmount to YLE's control bar
 
-**control-actions.js** - Platform-agnostic action handlers
+**control-actions.js** - Action handlers
 - `togglePlayPause()` - Play/pause video
 - `skipToPreviousSubtitle()` - Navigate to prev subtitle
 - `skipToNextSubtitle()` - Navigate to next subtitle
 - `repeatCurrentSubtitle()` - Play subtitle segment loop
 - `setPlaybackSpeed()` - Speed control (0.5x - 2.0x)
-- `getVideoElement(platform)` - Platform-specific video selector
+- `getVideoElement()` - Get video element
 
-**control-keyboard.js** - Unified keyboard handler
+**control-keyboard.js** - Keyboard handler
 - `ControlKeyboard` class with unified key bindings
-- Platform-specific configuration (capture phase for YouTube)
 
 **control-integration.js** - Bridge to contentscript
 - Manages subtitle data: `_subtitles` array (with startTime/endTime)
 - State management: loads/saves to Chrome storage.sync
-- Audio download handlers (recorder + screen capture)
+- Audio download handlers (screen capture for YLE's DRM)
 - Handles all callbacks from ControlPanel
 
 **control-icons.js** - SVG icon definitions (18x18 viewBox)
 - Icons: settings, previous, next, repeat, warning, speed, play, pause, subtitles, language, autoPause, download
 
-### Platform Adapters
+### YLE Configuration
 
-Each adapter provides:
-- `isMatch()` - Detect if this adapter should run
-- `isVideoPage()` - Check if on a video page
-- `getVideoElement()` - Selector for video element
-- `getControlPanelMountConfig()` - Where to insert controls UI
-- `getKeyboardConfig()` - Platform-specific keyboard settings
-- `SELECTORS` - DOM selectors for the platform
+| Setting | Value |
+|---------|-------|
+| URL Match | `https://areena.yle.fi/*` |
+| Source Language | Finnish (FI) - auto-detected |
+| Controls Mount | `[class^="BottomControlBar__LeftControls"]` |
+| Subtitle Selector | `[data-testid="subtitles-wrapper"]` |
+| Audio Download | Screen recording (DRM protection) |
 
-| Platform | Hostname | Source Lang | Controls Mount | Keyboard | Subtitle Selector |
-|----------|----------|-------------|----------------|----------|-------------------|
-| **YLE** | `areena.yle.fi` | Finnish (FI) | `[class^="BottomControlBar__LeftControls"]` | Standard | `[data-testid="subtitles-wrapper"]` |
-| **YouTube** | `www.youtube.com` | English (en) | `.ytp-left-controls` | **Capture phase** | `.ytp-caption-window-container` |
-| **HTML5** | Any | Auto-detect | Floating overlay | Standard | `textTracks` API |
-
-### GENERAL Features (must work on ALL platforms the same way)
+### Features
 
 | Feature | Behavior | Location |
 |---------|----------|----------|
-| Clickable original text | ALWAYS shown, even when dual sub OFF | `addContentToDisplayedSubtitlesWrapper`, `displayYouTubeSubtitle` |
-| Translation line | Only shown when dual sub ON | Same functions, check `dualSubEnabled` |
+| Clickable original text | ALWAYS shown, even when dual sub OFF | `addContentToDisplayedSubtitlesWrapper` |
+| Translation line | Only shown when dual sub ON | Same function, check `dualSubEnabled` |
 | Word popup dictionary | Click any word -> translation popup | `createSubtitleSpanWithClickableWords` |
 | Skip prev/next | Jump to previous/next subtitle | `ControlActions.skipToPreviousSubtitle/skipToNextSubtitle` |
 | Repeat | Play from subtitle start to current position | `ControlActions.repeatCurrentSubtitle` |
@@ -210,13 +119,11 @@ Each adapter provides:
 ### Subtitle Processing Pipeline
 
 **Detection & Interception:**
-- YLE: Page-context VTT interception via `yle-injected.js`
-- YouTube: Page-context timedtext API interception via `youtube-injected.js`
-- HTML5: Direct TextTrack API monitoring (content script)
+- Page-context VTT interception via `yle-injected.js`
 
 **Main Processing (contentscript.js):**
 1. MutationObserver watches subtitle wrapper
-2. Batch translation (~2-4 subtitles at a time for YLE)
+2. Batch translation (~2-4 subtitles at a time)
 3. Accumulates into `fullSubtitles` array (CRITICAL: must accumulate, not replace)
 4. Maps original -> translated text
 5. Displays in dual-line format when enabled
@@ -229,8 +136,7 @@ Each adapter provides:
 ### Audio Download Pipeline
 
 **Files Involved:**
-- `audio-recorder.js` - Records from Web Audio API (standard videos)
-- `screen-recorder.js` - Records screen/tab with audio (DRM videos like YLE)
+- `screen-recorder.js` - Records screen/tab with audio (YLE uses DRM)
 - `audio-filters.js` - Removes non-verbal segments (music, effects)
 - `audio-encoder.js` - Encodes to MP3 using lamejs
 - `audio-download-ui.js` - Shows progress and download UI
@@ -238,11 +144,10 @@ Each adapter provides:
 **Flow:**
 1. User presses `A` or clicks download button
 2. `ControlIntegration._handleDownloadAudio()` called
-3. For YLE: Use ScreenRecorder (DRM protection)
-4. For YouTube/HTML5: Use AudioRecorder (Web Audio API)
-5. Extract speech segments using AudioFilters
-6. Encode to MP3 using lamejs
-7. Trigger chrome.downloads API via background.js
+3. Use ScreenRecorder (YLE has DRM protection)
+4. Extract speech segments using AudioFilters
+5. Encode to MP3 using lamejs
+6. Trigger chrome.downloads API via background.js
 
 ### Core Scripts
 
@@ -252,7 +157,7 @@ Each adapter provides:
 - Listens to `chrome.storage.onChanged` for provider updates
 
 **contentscript.js** - Main content script
-- Platform detection and initialization
+- YLE-specific initialization
 - Subtitle observation and display
 - Translation request batching
 - Word click handlers (popup dictionary)
@@ -274,8 +179,7 @@ Each adapter provides:
 | `P` | Toggle auto-pause |
 | `[` | Decrease speed |
 | `]` | Increase speed |
-| `A` | Download audio (screen recording on YLE) |
-| `Space` | Play/Pause (YouTube/HTML5 only) |
+| `A` | Download audio (screen recording) |
 
 ## Translation Providers
 
@@ -315,22 +219,16 @@ YLE's native subtitles MUST be enabled through their player UI first. Our extens
 - MutationObserver watches for changes to this wrapper
 - When `dualSubEnabled` is true, original wrapper is hidden, displayed wrapper shows clickable words + translation
 
-### 3. YouTube Keyboard Handling
-YouTube requires `useCapture: true` for keyboard event listeners to intercept before YouTube's own handlers. See `control-keyboard.js` line 54.
-
-### 4. Extension Reload Required
+### 3. Extension Reload Required
 Chrome extensions do NOT auto-reload when source files change. After editing:
 1. Go to `chrome://extensions`
 2. Find the extension and click reload
 3. Refresh the target page
 
-### 5. Control Panel Mount Points
-Each platform has a `getControlPanelMountConfig()` method:
-- **YLE:** Appends to `[class^="BottomControlBar__LeftControls"]`
-- **YouTube:** Appends to `.ytp-left-controls`
-- **HTML5:** Floating overlay on video parent
+### 4. Control Panel Mount Point
+YLE control panel mounts to `[class^="BottomControlBar__LeftControls"]`
 
-### 6. Subtitle Navigation (Skip/Repeat) - CRITICAL
+### 5. Subtitle Navigation (Skip/Repeat) - CRITICAL
 For skip prev/next/repeat to work, subtitles must be synced to `ControlIntegration`.
 
 **Subtitle Accumulation Issue:**
@@ -356,79 +254,36 @@ fullSubtitles.sort((a, b) => a.startTime - b.startTime);
 ControlIntegration.setSubtitles(fullSubtitles);
 ```
 
-**Key locations:**
-- `fullSubtitles` array declared at ~line 316-320 in contentscript.js
-- YLE: `handleBatchTranslation()` accumulates into `fullSubtitles` (~line 488-513)
-- YouTube: Initial load at `youtubeSubtitlesLoaded` handler (~line 2577-2591)
-- Clear arrays in `loadMovieCacheAndUpdateMetadata()` and YouTube navigation handler
-
-### 7. YLE Mouse Activity
+### 6. YLE Mouse Activity
 YLE hides controls on mouse inactivity. To show controls programmatically:
 ```javascript
 const playerUI = document.querySelector('[class*="PlayerUI"]');
 playerUI.classList.add('yle-mouse-active');
 ```
 
-### 8. YLE Video Overlay Closes When Showing Modals (IMPORTANT)
+### 7. YLE Video Overlay Closes When Showing Modals (IMPORTANT)
 **Problem:** On YLE, clicking buttons that show modal dialogs (like the audio download confirmation) would close the video overlay, returning to the series page.
 
 **Root Cause:** YLE's video player opens as an overlay on the series page (URL stays the same). When our extension appends modal elements to `document.body`, YLE interprets this DOM manipulation as a signal to close the video overlay.
 
-**Key Discovery:**
-- Keyboard shortcuts that don't show modals work fine (video stays open)
-- Button clicks that trigger modal creation close the video
-- Even programmatic DOM appends to `document.body` trigger this behavior
-
 **Solution (in `control-integration.js`):**
-For YLE platform, skip showing any custom modals and go directly to the action:
+For YLE, skip showing any custom modals and go directly to the action:
 ```javascript
 async _handleDownloadAudio() {
-  // YLE uses DRM protection - offer screen recording instead
-  if (this._platform === 'yle') {
-    // On YLE, showing any modal closes the video overlay
-    // So we skip the confirmation and go directly to screen recording
-    const video = ControlActions.getVideoElement(this._platform);
-    if (!video) {
-      console.error('DualSubExtension: No video found');
-      return;
-    }
-
-    // Start recording directly without modal
-    await this._startYLERecording(video, speechSegments);
+  // YLE uses DRM protection - go directly to screen recording
+  // Showing any modal closes the video overlay
+  const video = ControlActions.getVideoElement();
+  if (!video) {
+    console.error('DualSubExtension: No video found');
     return;
   }
-  // ... show modal for other platforms
+
+  // Start recording directly without modal
+  await this._startYLERecording(video, speechSegments);
 }
 ```
 
-**Key files:**
-- `controls/control-integration.js` - `_handleDownloadAudio()` and `_startYLERecording()`
-- Keyboard shortcut "A" triggers the same code path
-
-### 9. YouTube Subtitle Overlay Can Be Removed by DOM Updates
-**Problem:** YouTube may re-render its player (during ads, fullscreen transitions, etc.), which removes our subtitle overlay. The `displayYouTubeSubtitle()` function would silently return if the wrapper doesn't exist, causing subtitles to stop showing.
-
-**Solution (in `contentscript.js`):**
-Added `ensureYouTubeSubtitleOverlay()` function that recreates the overlay if it's been removed:
-```javascript
-function ensureYouTubeSubtitleOverlay() {
-  let wrapper = document.getElementById('displayed-subtitles-wrapper');
-  if (wrapper) return wrapper;
-
-  // Overlay was removed - recreate it
-  const player = YouTubeAdapter.getPlayerContainer();
-  if (!player) return null;
-
-  const overlay = YouTubeAdapter.createSubtitleOverlay();
-  const subtitleWrapper = YouTubeAdapter.createSubtitleDisplayWrapper();
-  overlay.appendChild(subtitleWrapper);
-  YouTubeAdapter.positionSubtitleOverlay(overlay);
-
-  return subtitleWrapper;
-}
-```
-
-### 10. Manifest V3 Service Worker Termination
+### 8. Manifest V3 Service Worker Termination
 **Problem:** Chrome can terminate the background service worker at any time to save resources. If a translation request is pending when this happens, the content script receives "message channel closed before a response was received" error, causing translations to fail.
 
 **Solution (in `contentscript.js`):**
@@ -455,7 +310,7 @@ for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
 }
 ```
 
-### 11. Subtitle Sync Timing for Audio Download (IMPORTANT - REGRESSION PRONE)
+### 9. Subtitle Sync Timing for Audio Download (IMPORTANT - REGRESSION PRONE)
 **Problem:** The "Please wait for subtitles to load" error appears even when subtitles are loaded, because they weren't synced to `ControlIntegration._subtitles`.
 
 **Root Cause:** The sync calls had an `isInitialized()` check:
@@ -468,7 +323,7 @@ if (typeof ControlIntegration !== 'undefined' && ControlIntegration.isInitialize
 `isInitialized()` requires the panel to be MOUNTED, but `setSubtitles()` just stores data - it doesn't need the panel. When panel mount was delayed (retry pending), subtitles never got synced.
 
 **Solution:**
-1. Remove `isInitialized()` check from all `setSubtitles` calls (lines ~528, ~2362 in contentscript.js):
+1. Remove `isInitialized()` check from all `setSubtitles` calls:
 ```javascript
 // CORRECT - just check if ControlIntegration exists
 if (typeof ControlIntegration !== 'undefined') {
@@ -476,26 +331,15 @@ if (typeof ControlIntegration !== 'undefined') {
 }
 ```
 
-2. Export `fullSubtitles` to window for cross-module access (line ~339 in contentscript.js):
+2. Export `fullSubtitles` to window for cross-module access:
 ```javascript
 const fullSubtitles = [];
 window.fullSubtitles = fullSubtitles;  // For fallback access from control-integration.js
 ```
 
-3. Use `window.fullSubtitles` in fallback (in `control-integration.js` `_handleDownloadAudio()`):
-```javascript
-if (!this._subtitles || this._subtitles.length === 0) {
-  if (typeof window.fullSubtitles !== 'undefined' && window.fullSubtitles.length > 0) {
-    this.setSubtitles(window.fullSubtitles);
-  }
-}
-```
-
-**IMPORTANT:** Only use `fullSubtitles`/`window.fullSubtitles` - it's platform-agnostic. Never add platform-specific variables (like `ytCurrentSubtitles`) to unified control modules.
-
 **Key insight:** `setSubtitles()` just stores data - don't guard it with UI-dependent checks like `isInitialized()`.
 
-### 12. Array Reference Bug in setSubtitles (CRITICAL)
+### 10. Array Reference Bug in setSubtitles (CRITICAL)
 **Problem:** Even after `setSubtitles(fullSubtitles)` was called, `_subtitles` would be empty when download was triggered.
 
 **Root Cause:** `setSubtitles` stored a REFERENCE to the array, not a copy:
@@ -513,45 +357,7 @@ this._subtitles = subtitles.map(sub => ({ ...sub }));
 
 **Key insight:** When storing arrays that may be modified elsewhere, ALWAYS copy them. Watch out for `.length = 0` pattern which clears arrays in-place.
 
-### 13. YouTube "Same Lang" Bug - Hardcoded Source Language (Session 2026-01-20)
-**Problem:** On YouTube, the extension always showed "Same Lang" badge even when source (Finnish) and target (English) languages were different.
-
-**Root Cause (Two-part):**
-1. In `contentscript.js` line ~330, the source language was hardcoded:
-```javascript
-// WRONG - hardcoded 'en' for YouTube
-sourceLanguage: currentPlatform.name === 'youtube' ? 'en' : 'fi'
-```
-
-2. When YouTube detected the actual source language ('fi'), it set `ytSourceLanguage` but NOT `detectedSourceLanguage`, so the detected value was never passed to `ControlIntegration.init()`.
-
-**Solution:**
-1. In `contentscript.js`, pass `detectedSourceLanguage` instead of hardcoded value:
-```javascript
-// CORRECT - use detected language
-const initOptions = { dualSubEnabled, autoPauseEnabled, playbackSpeed };
-if (detectedSourceLanguage) {
-  initOptions.sourceLanguage = detectedSourceLanguage;
-}
-const panel = await ControlIntegration.init(currentPlatform.name, initOptions);
-```
-
-2. In the YouTube subtitle loading handler (~line 2373), also set `detectedSourceLanguage`:
-```javascript
-if (language !== ytSourceLanguage) {
-  ytSourceLanguage = language;
-  detectedSourceLanguage = language;  // ADD THIS
-  // Also call ControlIntegration.setSourceLanguage(language) if initialized
-}
-```
-
-**Key files:**
-- `contentscript.js` lines ~326-336 (init options)
-- `contentscript.js` lines ~2373-2385 (YouTube source language switch)
-
-**Key insight:** When implementing dynamic language detection, ensure ALL code paths that detect language also update the global `detectedSourceLanguage` variable, not just platform-specific variables.
-
-### 13. Extension Context Invalidated Error (PENDING FIX)
+### 11. Extension Context Invalidated Error (PENDING FIX)
 **Problem:** After switching tabs or changing language settings, the extension panel stops working. Console shows "Extension context invalidated" errors.
 
 **Root Cause:** When the extension is reloaded (manually or via Chrome update), the content scripts on already-open pages keep running but lose access to `chrome.*` APIs. Any call to `chrome.storage.sync.get()`, `chrome.runtime.sendMessage()`, etc. will throw "Extension context invalidated".
@@ -563,36 +369,15 @@ if (language !== ytSourceLanguage) {
 - Panel doesn't respond to keyboard shortcuts
 - Translations stop loading
 
-**Current State (as of 2025-01-20):**
-- `_loadPreferences()` in `control-integration.js:234` has try-catch but other code paths may not
-- `getEffectiveTargetLanguage()` in `utils.js:99` has try-catch
-- Multiple uncaught errors suggest other chrome API calls lack error handling
-
-**Needed Fix:**
-1. Add a global check for extension context validity
-2. Show user-friendly message: "Extension updated. Please refresh the page."
-3. Wrap ALL chrome.* API calls in try-catch with context validation
-4. Consider using a wrapper function for all chrome API calls
-
-**Key files:**
-- `controls/control-integration.js` - `_loadPreferences()`, event handlers
-- `utils.js` - `getEffectiveTargetLanguage()`, storage utilities
-- `contentscript.js` - translation calls, storage operations
-- `background.js` - message handlers
-
 **Workaround:** Refresh the page after the extension is reloaded.
 
-### 14. Same Language Mode Disabling ALL Controls (Session 2026-01-20)
-**Problem:** On YLE with source=target language (Finnish→Finnish), ALL control panel features were disabled (skip/repeat/speed/download grayed out), not just the DS (Dual Subtitles) toggle.
+### 12. Same Language Mode Disabling ALL Controls (Session 2026-01-20)
+**Problem:** With source=target language (Finnish→Finnish), ALL control panel features were disabled (skip/repeat/speed/download grayed out), not just the DS (Dual Subtitles) toggle.
 
 **Root Cause:** In `control-panel.js`, the `featuresDisabled` logic incorrectly used `isActive`:
 ```javascript
 // Line 258 - WRONG
 const featuresDisabled = !extensionEnabled || !isActive;
-
-// Line 652-653 - WRONG
-const { extensionEnabled, isActive } = this.state;
-const shouldDisable = !extensionEnabled || !isActive;
 ```
 
 When same language is detected, `isActive` becomes `false` (because translation isn't needed), which caused ALL features to be disabled. But playback features (skip/repeat/speed/download) should work even when translation isn't needed.
@@ -603,26 +388,86 @@ When same language is detected, `isActive` becomes `false` (because translation 
 // Features (skip/repeat/speed/download) are only disabled when extension is OFF
 // NOT when same language - user should still be able to use playback features
 const featuresDisabled = !extensionEnabled;
-
-// Line 652-655 - CORRECT
-const { extensionEnabled } = this.state;
-const shouldDisable = !extensionEnabled;
 ```
 
-The DS toggle already has its own separate disable logic via `dualSubDisabled = !translationNeeded`.
+### 13. Events Module Using ControlPanel Class Instead of Instance (Session 2026-01-21)
+**Problem:** The extension switch was always disabled even when CC was on and subtitles were detected.
 
-**Key files:**
-- `controls/control-panel.js` lines ~258-260 (HTML generation)
-- `controls/control-panel.js` lines ~652-655 (`_updateFeaturesDisabledState()`)
+**Root Cause:** In `events.js`, the `_updateUI()` method was checking `ControlPanel._mounted` and calling `ControlPanel.updateFromState()`, but `ControlPanel` is a CLASS - the actual panel instance is stored in `ControlIntegration._panel`.
 
-**Key insight:** `isActive` indicates whether TRANSLATION is active, but playback features should work independently. Only the DS toggle should be disabled when translation isn't needed.
+**Solution (events.js):**
+```javascript
+// CORRECT - Use the actual panel instance from ControlIntegration
+if (typeof ControlIntegration !== 'undefined' && ControlIntegration._panel && ControlIntegration._panel._mounted) {
+  ControlIntegration._panel.updateFromState({...});
+}
+```
+
+### 14. YLE CC Off Not Detected - Wrapper Hidden Instead of Removed (Session 2026-01-21)
+**Problem:** The extension toggle wasn't disabled when CC was turned off. The toggle should be grayed out when there are no subtitles to process.
+
+**Root Cause:** The MutationObserver only watched for `removedNodes` to detect CC being turned off. But YLE doesn't REMOVE the subtitles-wrapper when CC is turned off - it just HIDES it (`display: none`). Since the element was still in the DOM, `yleSubtitlesGone` was never dispatched.
+
+**Solution (contentscript.js):**
+Use a **dedicated** observer only on the subtitles-wrapper element:
+```javascript
+// Separate observer ONLY for the subtitles-wrapper element
+function setupSubtitlesWrapperStyleObserver(wrapper) {
+  subtitlesWrapperObserver = new MutationObserver((mutations) => {
+    // Handle style changes on just this element
+  });
+
+  // Observe ONLY this specific element's attributes
+  subtitlesWrapperObserver.observe(wrapper, {
+    attributes: true,
+    attributeFilter: ['style']
+  });
+}
+```
+
+**Key insight:** MutationObserver performance depends on WHAT you observe. Observing attributes on the entire document is almost always a mistake. Target specific elements.
+
+### 15. Property Name Mismatch Between Modules - captionsEnabled vs ccEnabled (Session 2026-01-21)
+**Problem:** The panel wasn't disabled when CC was turned off, even after adding CC detection logic.
+
+**Root Cause:** Property name mismatch between modules:
+- `ControlIntegration` passed `captionsEnabled: true/false`
+- `ControlPanel` expected `ccEnabled: true/false`
+
+**Solution (control-integration.js):**
+```javascript
+// BEFORE - wrong property name
+captionsEnabled: this._state.captionsEnabled,
+
+// AFTER - correct property name
+ccEnabled: this._state.captionsEnabled,  // Note: panel uses ccEnabled, not captionsEnabled
+```
+
+**Key insight:** When integrating modules, verify that property names match between caller and callee.
+
+### 16. Missing Initial CC Status Detection on Page Load (Session 2026-01-21)
+**Problem:** When the page loaded with CC already OFF, the State module's `ccStatus` was `false` (correct), but the panel was created before State was initialized, so it used the default value.
+
+**Solution (contentscript.js):**
+Added initial CC detection in `initializeStateAndEvents()`:
+```javascript
+// Initial CC status detection for YLE
+// The MutationObserver only catches CHANGES, so we need to check the initial state
+const wrapper = document.querySelector('[data-testid="subtitles-wrapper"]');
+if (wrapper) {
+  const computedDisplay = getComputedStyle(wrapper).display;
+  const isVisible = computedDisplay !== 'none';
+  State.setCCStatus(isVisible);
+} else {
+  State.setCCStatus(false);
+}
+```
+
+**Key insight:** Observers/listeners only catch changes, not initial state. Always check the initial state at startup.
 
 ---
 
-## Debugging Methodology (Session 2025-01-20)
-
-### The Regression Cycle Problem
-When fixing bugs, be careful not to fix one issue while creating another. This session had multiple iterations of the "Please wait for subtitles" error because fixes addressed symptoms, not root causes.
+## Debugging Methodology
 
 ### Debugging Checklist for Subtitle Issues
 1. **Check if data is loaded**: Look for console logs showing subtitle count
@@ -692,61 +537,47 @@ window.fullSubtitles = fullSubtitles;  // Now accessible as window.fullSubtitles
 ### Skip/Repeat not working
 1. Verify subtitles are loaded into ControlIntegration
 2. Check `ControlIntegration._subtitles` array has data
-3. Ensure video element is accessible via `ControlActions.getVideoElement(platform)`
+3. Ensure video element is accessible via `ControlActions.getVideoElement()`
 
 ### Menu closes immediately
 See "YLE Menu Focus Issue" above - likely focusVideo() stealing focus.
 
 ### Audio download not working
-1. Check if DRM content (YLE) - must use screen recording
-2. Verify Web Audio API access for non-DRM content
-3. Check console for lamejs encoding errors
+1. YLE uses DRM - must use screen recording
+2. Check console for lamejs encoding errors
 
 ---
 
 ## Testing Checklist
 
 ### YLE Areena
-- [ ] Dual subtitle toggle
-- [ ] Auto-pause on subtitle change
-- [ ] Skip previous/next subtitle
-- [ ] Repeat current subtitle
-- [ ] Playback speed control (0.5x - 2.0x)
+- [ ] Dual subtitle toggle (D key)
+- [ ] Auto-pause on subtitle change (P key)
+- [ ] Skip previous/next subtitle (comma/period)
+- [ ] Repeat current subtitle (R key)
+- [ ] Playback speed control ([ and ] keys)
 - [ ] Word click popup dictionary
-- [ ] Screen recording audio download
+- [ ] Screen recording audio download (A key)
 - [ ] Settings menus don't close unexpectedly
+- [ ] Extension toggle enables/disables correctly
+- [ ] CC on/off correctly enables/disables extension toggle
 
-### YouTube
-- [ ] All above features
-- [ ] Keyboard shortcuts work (capture phase)
-- [ ] Shorts page handling
+### Cache Management
+- [ ] Word cache count displays correctly in options page
+- [ ] Subtitle cache count displays correctly
+- [ ] Clear word cache works
+- [ ] Clear subtitle cache works
 
-### HTML5 (Generic)
-- [ ] All above features
-- [ ] Floating control panel positioning
+### Language Switch Test
+1. [ ] Target=English → dual sub ON, translations showing
+2. [ ] Change target to Simplified Chinese → dual sub should still work
+3. [ ] Change target to Finnish (same as source) → dual sub should auto-disable
+4. [ ] Change target back to English → verify dual sub re-enables automatically
 
-### All Platforms
-- [ ] Keyboard shortcuts (D, comma, period, R, P, [, ], A, Space)
-- [ ] Translation providers (Google, DeepL, Claude, Gemini, xAI)
-- [ ] Extension options page
-
-### Cross-Platform Language Switch Test (CRITICAL)
-This test catches race conditions and state management bugs when switching languages and tabs.
-
-**Steps:**
-1. [ ] Start on YouTube with Finnish video, target=English → dual sub ON, translations showing
-2. [ ] Change target to Simplified Chinese via popup → dual sub should still work
-3. [ ] Change target to Finnish (same as source) → dual sub should auto-disable (same language)
-4. [ ] Switch to YLE tab → verify panel state, 'D' toggle responds, subtitles work
-5. [ ] Change target back to English → verify dual sub re-enables automatically
-6. [ ] Switch back to YouTube → verify still working
-7. [ ] Repeat cycle 2-3 times to catch intermittent bugs
-
-**Watch for:**
-- "Extension context invalidated" errors in console
-- Panel not responding to 'D' key
-- Dual sub stuck OFF when it should be ON (or vice versa)
-- Translations not loading after language switch
+### Error Handling
+- [ ] Extension options page loads and saves correctly
+- [ ] No console errors on page load
+- [ ] No "Extension context invalidated" after reload (refresh page)
 
 ---
 
@@ -754,17 +585,9 @@ This test catches race conditions and state management bugs when switching langu
 
 | Category | Count |
 |----------|-------|
-| Total Lines of Code | ~9,900 |
-| Platform Adapters | 3 (YLE, YouTube, HTML5) |
+| Total Lines of Code | ~5,500 |
+| Platform | YLE Areena only |
 | Control Modules | 10 |
-| Keyboard Shortcuts | 9 |
+| Keyboard Shortcuts | 8 |
 | Translation Providers | 5 |
 | Chrome API Permissions | storage, downloads |
-
----
-
-## Violations to Clean Up (Technical Debt)
-
-- `contentscript.js` has duplicate auto-pause logic for YLE vs YouTube
-- `contentscript.js` has legacy skip/repeat functions that should be removed
-- Platform-specific keyboard handlers should use unified `ControlKeyboard`

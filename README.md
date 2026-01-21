@@ -1,12 +1,10 @@
-# Finnish Language Learner
+# YLE Language Reactor
 
-A Chrome extension for immersive language learning on YLE Areena, YouTube, and any HTML5 video. Display dual subtitles, click any word for instant translation, and control playback to study at your own pace.
+A Chrome extension for immersive language learning on YLE Areena (Finnish public broadcasting). Display dual subtitles, click any word for instant translation, and control playback to study at your own pace.
 
-## Supported Platforms
+## Supported Platform
 
 - **YLE Areena** - Finnish public broadcasting (areena.yle.fi)
-- **YouTube** - Any video with subtitles
-- **HTML5 Videos** - Generic support for other video sites
 
 ## Features
 
@@ -63,12 +61,6 @@ A Chrome extension for immersive language learning on YLE Areena, YouTube, and a
 3. Enable "Dual Sub" in the control bar
 4. Click any word to see its translation
 
-### YouTube
-1. Go to [YouTube](https://www.youtube.com/)
-2. Play any video with subtitles/captions
-3. Enable "Dual Sub" in the control bar
-4. Click any word to see its translation
-
 ### Settings
 Click the extension icon → Settings to:
 - Choose your target language
@@ -87,7 +79,7 @@ Click the extension icon → Settings to:
 
 ## How It Works
 
-1. Extension intercepts subtitle data from each platform (WebVTT, YouTube captions, etc.)
+1. Extension intercepts subtitle data from YLE Areena (WebVTT format)
 2. Original subtitles are displayed with translations below
 3. Clicking a word queries Wiktionary, then falls back to AI translation
 4. All translations are cached locally in IndexedDB
@@ -103,11 +95,8 @@ Click the extension icon → Settings to:
 ├── database.js             # IndexedDB caching
 ├── styles.css              # UI styling
 ├── popup.html/js           # Extension popup
-├── platforms/              # Platform-specific adapters
-│   ├── platform-base.js    # Base adapter class
-│   ├── yle/                # YLE Areena adapter
-│   ├── youtube/            # YouTube adapter
-│   └── html5/              # Generic HTML5 adapter
+├── platforms/
+│   └── yle/                # YLE Areena adapter
 ├── controls/               # Unified control panel
 │   ├── control-panel.js    # UI components
 │   ├── control-actions.js  # Action handlers
@@ -127,7 +116,7 @@ npm run build
 
 ### Testing
 
-Load the extension in developer mode and test on YLE Areena, YouTube, or any HTML5 video site.
+Load the extension in developer mode and test on YLE Areena.
 
 ## Privacy
 
@@ -150,4 +139,3 @@ GPL v3 (GNU General Public License v3)
 - Inspired by [Language Reactor](https://www.languagereactor.com/)
 - [Wiktionary](https://en.wiktionary.org/) for word definitions
 - [YLE Areena](https://areena.yle.fi/) for Finnish content
-- [YouTube](https://www.youtube.com/) for worldwide video content

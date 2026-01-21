@@ -1,21 +1,17 @@
 /**
  * Control Integration Module
  *
- * Bridges the unified ControlPanel with the existing contentscript.js functionality.
- * Provides a clean interface for initializing and managing the control panel on each platform.
+ * Bridges the ControlPanel with the existing contentscript.js functionality for YLE Areena.
  */
 
 /* global ControlPanel, ControlActions, ControlKeyboard, AudioFilters, AudioRecorder, AudioEncoder, AudioDownloadUI, normalizeLanguageCode, isSameLanguage, getEffectiveTargetLanguage, loadExtensionEnabledFromStorage, saveExtensionEnabledToStorage, isExtensionContextValid, safeStorageGet, safeStorageSet, safeSendMessage, showExtensionInvalidatedToast */
 
 /**
- * Integration manager for the unified control panel
+ * Integration manager for the YLE control panel
  */
 const ControlIntegration = {
   /** @type {ControlPanel|null} */
   _panel: null,
-
-  /** @type {string} */
-  _platform: null,
 
   /** @type {boolean} */
   _initialized: false,  // Whether init() has completed loading preferences
@@ -27,10 +23,7 @@ const ControlIntegration = {
     playbackSpeed: 1.0,
     sourceLanguage: null,       // Detected from subtitles
     targetLanguage: 'en',       // Effective target language
-    extensionEnabled: true,     // Global on/off toggle
-    activationReason: null,     // 'active', 'same_language', 'no_subtitles', 'manually_disabled'
-    captionsEnabled: false,     // Whether native captions (CC) are ON
-    translationNeeded: false    // Whether source != target (dual sub should be enabled)
+    extensionEnabled: true      // Global on/off toggle (user controls everything)
   },
 
   /** @type {Array<{time: number, text: string}>} */
@@ -40,14 +33,11 @@ const ControlIntegration = {
   _subtitles: [],
 
   /**
-   * Initialize the control integration for a platform
-   * @param {string} platform - 'yle' | 'youtube' | 'html5'
+   * Initialize the control integration for YLE Areena
    * @param {Object} options - Initial options
    * @returns {Promise<ControlPanel|null>}
    */
-  async init(platform, options = {}) {
-    this._platform = platform;
-
+  async init(options = {}) {
     // Load preferences from storage
     await this._loadPreferences();
 
@@ -57,16 +47,9 @@ const ControlIntegration = {
     // Mark as initialized - preferences are now loaded
     this._initialized = true;
 
-    // Calculate if translation is needed
-    this._state.translationNeeded = this.isTranslationNeeded();
-
-    // Calculate initial activation status
-    const activation = this.shouldBeActive();
-    this._state.activationReason = activation.reason;
-
-    // Create the control panel
+    // Create the control panel for YLE
+    // Simplified: no auto-disable logic, user controls everything
     this._panel = new ControlPanel({
-      platform: platform,
       initialState: {
         dualSubEnabled: this._state.dualSubEnabled,
         autoPauseEnabled: this._state.autoPauseEnabled,
@@ -74,10 +57,6 @@ const ControlIntegration = {
         sourceLanguage: this._state.sourceLanguage,
         targetLanguage: this._state.targetLanguage,
         extensionEnabled: this._state.extensionEnabled,
-        activationReason: this._state.activationReason,
-        isActive: activation.active,
-        captionsEnabled: this._state.captionsEnabled,
-        translationNeeded: this._state.translationNeeded,
         availableLanguages: options.availableLanguages || []
       },
       callbacks: {
@@ -99,7 +78,7 @@ const ControlIntegration = {
     let element = await this._panel.mount();
 
     if (element) {
-      console.info('DualSubExtension: ControlIntegration initialized for platform:', platform);
+      console.info('DualSubExtension: ControlIntegration initialized for YLE Areena');
     } else {
       // Schedule retry mounts if initial mount fails
       this._scheduleRemount();
@@ -293,144 +272,41 @@ const ControlIntegration = {
     }
   },
 
-  /**
-   * Determine if the extension should be active based on current state
-   * Simplified: extension is active when enabled and subtitles are available
-   * Same language case just disables translation, but extension features (clickable words) still work
-   * @returns {{active: boolean, reason: string}}
-   */
-  shouldBeActive() {
-    // 1. If captions are OFF, extension can't be active
-    if (!this._state.captionsEnabled) {
-      return { active: false, reason: 'no_subtitles' };
-    }
-
-    // 2. If manually disabled, not active
-    if (!this._state.extensionEnabled) {
-      return { active: false, reason: 'manually_disabled' };
-    }
-
-    // 3. If no source language detected yet, not active
-    if (!this._state.sourceLanguage) {
-      return { active: false, reason: 'no_subtitles' };
-    }
-
-    // 4. Extension is active - same language handling is done separately for dual sub
-    return { active: true, reason: 'active' };
-  },
-
-  /**
-   * Check if translation is needed (source != target)
-   * Used to determine if dual sub should be enabled/disabled
-   * @returns {boolean}
-   */
-  isTranslationNeeded() {
-    if (!this._state.sourceLanguage) {
-      // When source language is unknown (null), assume translation IS needed
-      // This prevents incorrectly disabling dual sub during caption toggle events
-      // The actual same-language check will happen once source is detected
-      return true;
-    }
-    if (typeof isSameLanguage === 'function') {
-      return !isSameLanguage(this._state.sourceLanguage, this._state.targetLanguage);
-    }
-    // Fallback: compare normalized codes
-    const source = this._state.sourceLanguage?.toLowerCase() || '';
-    const target = this._state.targetLanguage?.toLowerCase() || '';
-    return source !== target;
-  },
+  // REMOVED: shouldBeActive() and isTranslationNeeded()
+  // User now controls everything manually - no auto-disable logic
 
   /**
    * Set whether native captions (CC button) are enabled
-   * This is the master switch - extension can only work when CC is ON
+   * Simplified: just stores the value, no auto-enable/disable logic
    * @param {boolean} enabled - Whether CC is ON
    */
   setCaptionsEnabled(enabled) {
-    const wasEnabled = this._state.captionsEnabled;
-    this._state.captionsEnabled = enabled;
-    console.info('DualSubExtension: Captions enabled:', enabled, 'was:', wasEnabled, 'extensionEnabled:', this._state.extensionEnabled);
+    console.info('DualSubExtension: Captions status changed:', enabled);
 
-    // DON'T reset extensionEnabled - preserve user's preference
-    // When CC turns on, extension will activate if extensionEnabled was true
-
-    // Recalculate activation
-    const activation = this.shouldBeActive();
-    this._state.activationReason = activation.reason;
-
-    // When CC turns ON and extension is enabled, recalculate translation needed
-    // and auto-enable dual sub if translation is needed
-    if (enabled && this._state.extensionEnabled) {
-      this._state.translationNeeded = this.isTranslationNeeded();
-
-      // Auto-enable dual sub if translation is needed
-      if (this._state.translationNeeded && !this._state.dualSubEnabled) {
-        this._state.dualSubEnabled = true;
-        chrome.storage.sync.set({ dualSubEnabled: true });
-        console.info('DualSubExtension: Auto-enabled dual sub (CC on + translation needed)');
-      }
-    }
-
-    // Update panel UI if mounted
+    // Update panel UI if mounted (just for display purposes)
     if (this._panel) {
       this._panel.updateState({
-        captionsEnabled: enabled,
-        extensionEnabled: this._state.extensionEnabled,
-        activationReason: activation.reason,
-        isActive: activation.active,
-        translationNeeded: this._state.translationNeeded,
-        dualSubEnabled: this._state.dualSubEnabled
+        sourceLanguage: this._state.sourceLanguage
       });
     }
 
     // Dispatch event for contentscript
-    // Only include dualSubEnabled if initialized (preferences loaded from storage)
     const event = new CustomEvent('dscCaptionsStateChanged', {
       detail: {
         captionsEnabled: enabled,
         extensionEnabled: this._state.extensionEnabled,
-        dualSubEnabled: this._initialized ? this._state.dualSubEnabled : undefined,
-        active: activation.active,
-        reason: activation.reason,
-        platform: this._platform
+        dualSubEnabled: this._state.dualSubEnabled
       }
     });
     document.dispatchEvent(event);
   },
 
   /**
-   * Check if translation should be shown (for dual sub feature)
-   * Returns false if source and target languages are the same
-   * @returns {boolean}
-   */
-  shouldShowTranslation() {
-    if (!this._state.extensionEnabled || !this._state.sourceLanguage) {
-      return false;
-    }
-
-    if (typeof isSameLanguage === 'function') {
-      return !isSameLanguage(this._state.sourceLanguage, this._state.targetLanguage);
-    }
-
-    return true;
-  },
-
-  /**
    * Handle extension toggle (manual on/off)
+   * Simplified: no prerequisites, user controls everything
    * @param {boolean} enabled - Whether extension should be enabled
    */
   async _handleExtensionToggle(enabled) {
-    // Prevent turning ON if captions are OFF
-    if (enabled && !this._state.captionsEnabled) {
-      console.info('DualSubExtension: Cannot enable extension - captions are OFF');
-      // Revert the UI toggle
-      if (this._panel) {
-        this._panel.updateState({
-          extensionEnabled: false
-        });
-      }
-      return;
-    }
-
     this._state.extensionEnabled = enabled;
 
     // Save to storage
@@ -440,25 +316,10 @@ const ControlIntegration = {
       await chrome.storage.sync.set({ extensionEnabled: enabled });
     }
 
-    // When enabling, auto-enable dual sub if translation is needed
-    if (enabled && this._state.translationNeeded && !this._state.dualSubEnabled) {
-      this._state.dualSubEnabled = true;
-      chrome.storage.sync.set({ dualSubEnabled: true });
-      console.info('DualSubExtension: Auto-enabled dual sub on extension enable');
-    }
-
-    // Recalculate activation
-    const activation = this.shouldBeActive();
-    this._state.activationReason = activation.reason;
-
     // Update panel UI if mounted
     if (this._panel) {
       this._panel.updateState({
-        extensionEnabled: enabled,
-        activationReason: activation.reason,
-        isActive: activation.active,
-        dualSubEnabled: this._state.dualSubEnabled,
-        translationNeeded: this._state.translationNeeded
+        extensionEnabled: enabled
       });
     }
 
@@ -466,24 +327,21 @@ const ControlIntegration = {
     const event = new CustomEvent('dscExtensionToggle', {
       detail: {
         enabled,
-        active: activation.active,
-        reason: activation.reason,
-        dualSubEnabled: this._state.dualSubEnabled,
-        platform: this._platform
+        dualSubEnabled: this._state.dualSubEnabled
       }
     });
     document.dispatchEvent(event);
 
-    console.info('DualSubExtension: Extension toggled:', enabled, 'Active:', activation.active, 'Reason:', activation.reason);
+    console.info('DualSubExtension: Extension toggled:', enabled);
   },
 
   /**
-   * Set the detected source language and recalculate activation
+   * Set the detected source language
+   * Simplified: just stores the value, no auto-enable/disable logic
    * @param {string} langCode - Detected language code
    */
   setSourceLanguage(langCode, options = {}) {
     // Handle null explicitly - it means "no subtitles available"
-    // Don't normalize null, as normalizeLanguageCode defaults to 'en'
     let normalized = null;
     if (langCode !== null && langCode !== undefined) {
       normalized = typeof normalizeLanguageCode === 'function'
@@ -491,72 +349,30 @@ const ControlIntegration = {
         : langCode?.toLowerCase() || null;
     }
 
-    // Prevent resetting to null if we have a valid source language
-    // unless explicitly forced (e.g., when CC turns OFF)
-    if (normalized === null && this._state.sourceLanguage !== null && !options.force) {
-      console.info('DualSubExtension: Ignoring null source language (already have:', this._state.sourceLanguage, ')');
-      return;
-    }
-
     this._state.sourceLanguage = normalized;
     console.info('DualSubExtension: Source language set:', normalized);
-
-    // Calculate if translation is needed (source != target)
-    const wasTranslationNeeded = this._state.translationNeeded;
-    this._state.translationNeeded = this.isTranslationNeeded();
-    console.info('DualSubExtension: Translation needed:', this._state.translationNeeded);
-
-    // Auto-enable/disable dual sub based on translation need
-    if (this._state.translationNeeded && this._state.extensionEnabled && this._state.captionsEnabled) {
-      // Translation needed - auto-enable dual sub
-      if (!this._state.dualSubEnabled) {
-        this._state.dualSubEnabled = true;
-        chrome.storage.sync.set({ dualSubEnabled: true });
-        console.info('DualSubExtension: Auto-enabled dual sub (translation needed)');
-      }
-    } else if (!this._state.translationNeeded && wasTranslationNeeded) {
-      // Same language - auto-disable dual sub
-      if (this._state.dualSubEnabled) {
-        this._state.dualSubEnabled = false;
-        chrome.storage.sync.set({ dualSubEnabled: false });
-        console.info('DualSubExtension: Auto-disabled dual sub (same language)');
-      }
-    }
-
-    // Recalculate activation
-    const activation = this.shouldBeActive();
-    this._state.activationReason = activation.reason;
 
     // Update panel UI if mounted
     if (this._panel) {
       this._panel.updateState({
-        sourceLanguage: normalized,
-        activationReason: activation.reason,
-        isActive: activation.active,
-        translationNeeded: this._state.translationNeeded,
-        dualSubEnabled: this._state.dualSubEnabled
+        sourceLanguage: normalized
       });
     }
 
     // Dispatch event for contentscript.js
-    // Only include dualSubEnabled if initialized (preferences loaded from storage)
-    // This prevents race condition where default false value overrides stored true value
     const event = new CustomEvent('dscSourceLanguageChanged', {
       detail: {
         sourceLanguage: normalized,
         targetLanguage: this._state.targetLanguage,
-        active: activation.active,
-        reason: activation.reason,
-        translationNeeded: this._state.translationNeeded,
-        dualSubEnabled: this._initialized ? this._state.dualSubEnabled : undefined,
-        platform: this._platform
+        dualSubEnabled: this._state.dualSubEnabled
       }
     });
     document.dispatchEvent(event);
   },
 
   /**
-   * Update target language and recalculate activation
+   * Update target language
+   * Simplified: just stores the value, no auto-enable/disable logic
    * @param {string} langCode - Target language code
    */
   setTargetLanguage(langCode) {
@@ -566,53 +382,23 @@ const ControlIntegration = {
 
     this._state.targetLanguage = normalized;
 
-    // Calculate if translation is needed (source != target)
-    const wasTranslationNeeded = this._state.translationNeeded;
-    this._state.translationNeeded = this.isTranslationNeeded();
-
-    // Auto-enable/disable dual sub based on translation need
-    if (this._state.translationNeeded && this._state.extensionEnabled && this._state.captionsEnabled) {
-      // Translation needed - auto-enable dual sub
-      if (!this._state.dualSubEnabled) {
-        this._state.dualSubEnabled = true;
-        chrome.storage.sync.set({ dualSubEnabled: true });
-        console.info('DualSubExtension: Auto-enabled dual sub (target language changed)');
-      }
-    } else if (!this._state.translationNeeded && wasTranslationNeeded) {
-      // Same language - auto-disable dual sub
-      if (this._state.dualSubEnabled) {
-        this._state.dualSubEnabled = false;
-        chrome.storage.sync.set({ dualSubEnabled: false });
-        console.info('DualSubExtension: Auto-disabled dual sub (same language after target change)');
-      }
-    }
-
-    // Recalculate activation
-    const activation = this.shouldBeActive();
-    this._state.activationReason = activation.reason;
-
     // Update panel UI if mounted
     if (this._panel) {
       this._panel.updateState({
-        targetLanguage: normalized,
-        activationReason: activation.reason,
-        isActive: activation.active,
-        translationNeeded: this._state.translationNeeded,
-        dualSubEnabled: this._state.dualSubEnabled
+        targetLanguage: normalized
       });
     }
 
-    console.info('DualSubExtension: Target language set:', normalized, 'Active:', activation.active, 'TranslationNeeded:', this._state.translationNeeded);
+    console.info('DualSubExtension: Target language set:', normalized);
   },
 
   /**
-   * Get the current activation status
-   * @returns {{active: boolean, reason: string, sourceLanguage: string|null, targetLanguage: string, extensionEnabled: boolean}}
+   * Get the current state
+   * Simplified: no activation logic, just return state
+   * @returns {{sourceLanguage: string|null, targetLanguage: string, extensionEnabled: boolean}}
    */
   getActivationStatus() {
-    const activation = this.shouldBeActive();
     return {
-      ...activation,
       sourceLanguage: this._state.sourceLanguage,
       targetLanguage: this._state.targetLanguage,
       extensionEnabled: this._state.extensionEnabled
@@ -621,28 +407,19 @@ const ControlIntegration = {
 
   /**
    * Handle dual sub toggle
+   * Simplified: no restrictions, user controls everything
    * @param {boolean} enabled
    * @private
    */
   _handleDualSubToggle(enabled) {
-    // Don't allow enabling if translation is not needed (same language)
-    if (enabled && !this._state.translationNeeded) {
-      console.info('DualSubExtension: Dual sub enable blocked - translation not needed');
-      // Revert UI if panel is mounted
-      if (this._panel) {
-        this._panel.updateState({ dualSubEnabled: false });
-      }
-      return;
-    }
-
     this._state.dualSubEnabled = enabled;
 
     // Save preference
     chrome.storage.sync.set({ dualSubEnabled: enabled });
 
-    // Dispatch event for contentscript.js to handle platform-specific logic
+    // Dispatch event for contentscript.js to handle
     const event = new CustomEvent('dscDualSubToggle', {
-      detail: { enabled, platform: this._platform }
+      detail: { enabled }
     });
     document.dispatchEvent(event);
 
@@ -662,7 +439,7 @@ const ControlIntegration = {
 
     // Dispatch event for contentscript.js
     const event = new CustomEvent('dscAutoPauseToggle', {
-      detail: { enabled, platform: this._platform }
+      detail: { enabled }
     });
     document.dispatchEvent(event);
 
@@ -674,12 +451,10 @@ const ControlIntegration = {
    * @private
    */
   _handlePrevSubtitle() {
-    ControlActions.skipToPreviousSubtitle(this._subtitleTimestamps, this._platform);
+    ControlActions.skipToPreviousSubtitle(this._subtitleTimestamps);
 
     // Dispatch event for contentscript.js
-    const event = new CustomEvent('dscPrevSubtitle', {
-      detail: { platform: this._platform }
-    });
+    const event = new CustomEvent('dscPrevSubtitle', { detail: {} });
     document.dispatchEvent(event);
   },
 
@@ -688,12 +463,10 @@ const ControlIntegration = {
    * @private
    */
   _handleNextSubtitle() {
-    ControlActions.skipToNextSubtitle(this._subtitleTimestamps, this._platform);
+    ControlActions.skipToNextSubtitle(this._subtitleTimestamps);
 
     // Dispatch event for contentscript.js
-    const event = new CustomEvent('dscNextSubtitle', {
-      detail: { platform: this._platform }
-    });
+    const event = new CustomEvent('dscNextSubtitle', { detail: {} });
     document.dispatchEvent(event);
   },
 
@@ -704,16 +477,14 @@ const ControlIntegration = {
   _handleRepeatSubtitle() {
     // Dispatch start event BEFORE calling repeat (to disable auto-pause)
     const startEvent = new CustomEvent('dscRepeatSubtitle', {
-      detail: { platform: this._platform, phase: 'start' }
+      detail: { phase: 'start' }
     });
     document.dispatchEvent(startEvent);
 
-    ControlActions.repeatCurrentSubtitle(this._subtitles, this._platform, () => {
+    ControlActions.repeatCurrentSubtitle(this._subtitles, () => {
       console.info('DualSubExtension: Repeat completed');
       // Dispatch end event when repeat completes
-      const endEvent = new CustomEvent('dscRepeatComplete', {
-        detail: { platform: this._platform }
-      });
+      const endEvent = new CustomEvent('dscRepeatComplete', { detail: {} });
       document.dispatchEvent(endEvent);
     });
   },
@@ -727,14 +498,14 @@ const ControlIntegration = {
     this._state.playbackSpeed = speed;
 
     // Apply speed directly
-    ControlActions.setPlaybackSpeed(speed, this._platform);
+    ControlActions.setPlaybackSpeed(speed);
 
     // Save preference
     chrome.storage.sync.set({ playbackSpeed: speed });
 
     // Dispatch event for contentscript.js
     const event = new CustomEvent('dscSpeedChange', {
-      detail: { speed, platform: this._platform }
+      detail: { speed }
     });
     document.dispatchEvent(event);
   },
@@ -747,12 +518,12 @@ const ControlIntegration = {
   _handleSourceLangChange(lang) {
     this._state.sourceLanguage = lang;
 
-    // Save preference (YouTube-specific)
+    // Save preference
     chrome.storage.sync.set({ ytSourceLanguage: lang });
 
     // Dispatch event for contentscript.js
     const event = new CustomEvent('dscSourceLangChange', {
-      detail: { language: lang, platform: this._platform }
+      detail: { language: lang }
     });
     document.dispatchEvent(event);
 
@@ -772,11 +543,11 @@ const ControlIntegration = {
    * @private
    */
   _handlePlayPause() {
-    const isPaused = ControlActions.togglePlayPause(this._platform);
+    const isPaused = ControlActions.togglePlayPause();
 
     // Dispatch event for contentscript.js
     const event = new CustomEvent('dscPlayPause', {
-      detail: { isPaused, platform: this._platform }
+      detail: { isPaused }
     });
     document.dispatchEvent(event);
   },
@@ -786,126 +557,32 @@ const ControlIntegration = {
    * @private
    */
   async _handleDownloadAudio() {
-    console.info('DualSubExtension: _handleDownloadAudio called, platform:', this._platform, 'subtitles:', this._subtitles?.length, 'isInit:', this.isInitialized());
+    console.info('DualSubExtension: _handleDownloadAudio called, subtitles:', this._subtitles?.length, 'isInit:', this.isInitialized());
 
-    if (!this._platform) {
-      console.error('DualSubExtension: _handleDownloadAudio called but platform is not set!');
-    }
-
-    // YLE uses DRM protection - offer screen recording instead
-    if (this._platform === 'yle') {
-      // Check if already recording - if so, stop it (toggle behavior)
-      if (typeof ScreenRecorder !== 'undefined' && ScreenRecorder.isRecording()) {
-        console.info('DualSubExtension: Stopping YLE screen recording');
-        ScreenRecorder.stopRecording();
-        return;
-      }
-
-      // On YLE, showing any modal closes the video overlay
-      // So we skip the confirmation and go directly to screen recording
-      const video = ControlActions.getVideoElement(this._platform);
-      if (!video) {
-        console.error('DualSubExtension: No video found');
-        return;
-      }
-
-      // Get speech segments if available
-      let speechSegments = null;
-      if (this._subtitles && this._subtitles.length > 0) {
-        speechSegments = AudioFilters.filterSpeechSegments(this._subtitles);
-      }
-
-      // Start recording directly without modal
-      await this._startYLERecording(video, speechSegments);
+    // YLE uses DRM protection - use screen recording
+    // Check if already recording - if so, stop it (toggle behavior)
+    if (typeof ScreenRecorder !== 'undefined' && ScreenRecorder.isRecording()) {
+      console.info('DualSubExtension: Stopping YLE screen recording');
+      ScreenRecorder.stopRecording();
       return;
     }
 
-    const video = ControlActions.getVideoElement(this._platform);
-
+    // On YLE, showing any modal closes the video overlay
+    // So we skip the confirmation and go directly to screen recording
+    const video = ControlActions.getVideoElement();
     if (!video) {
-      AudioDownloadUI.showError('No video found on this page');
+      console.error('DualSubExtension: No video found');
       return;
     }
 
-    // Check if subtitles are loaded - try to sync from global fullSubtitles if empty
-    // NOTE: Only use window.fullSubtitles here - it's the platform-agnostic array that ALL platforms populate
-    // Do NOT add platform-specific variables (like ytCurrentSubtitles) to this unified module
-    if (!this._subtitles || this._subtitles.length === 0) {
-      // Fallback: try to sync from global fullSubtitles array (handles timing issues)
-      // Access via window since it's defined in contentscript.js scope
-      if (typeof window.fullSubtitles !== 'undefined' && window.fullSubtitles.length > 0) {
-        console.info('DualSubExtension: Syncing subtitles from window.fullSubtitles array for download');
-        this.setSubtitles(window.fullSubtitles);
-      }
-
-      // Check again after fallback sync
-      if (!this._subtitles || this._subtitles.length === 0) {
-        AudioDownloadUI.showError('Please wait for subtitles to load before downloading audio');
-        return;
-      }
+    // Get speech segments if available
+    let speechSegments = null;
+    if (this._subtitles && this._subtitles.length > 0) {
+      speechSegments = AudioFilters.filterSpeechSegments(this._subtitles);
     }
 
-    // Check browser support
-    const support = AudioRecorder.checkSupport();
-    if (!support.supported) {
-      AudioDownloadUI.showError(`Browser not supported: ${support.reason}`);
-      return;
-    }
-
-    // Check if lamejs is available
-    if (!AudioEncoder.isAvailable()) {
-      AudioDownloadUI.showError('MP3 encoder not loaded. Please reload the page and try again.');
-      return;
-    }
-
-    // Filter to speech segments only
-    const speechSegments = AudioFilters.filterSpeechSegments(this._subtitles);
-
-    if (speechSegments.length === 0) {
-      AudioDownloadUI.showError('No speech segments found in subtitles');
-      return;
-    }
-
-    // Quick check: Try to see if audio capture will work
-    // This prevents the user from waiting only to get an error
-    const canCapture = await this._testAudioCapture(video);
-    if (!canCapture.success) {
-      AudioDownloadUI.showError(
-        'Cannot capture audio from this video. ' +
-        (canCapture.reason || 'This may be due to DRM protection or streaming restrictions.') +
-        ' Try using screen recording software instead.'
-      );
-      return;
-    }
-
-    // Merge adjacent segments to reduce seek operations
-    const mergedSegments = AudioFilters.mergeAdjacentSegments(speechSegments, 0.3);
-
-    // Get filtering summary
-    const summary = AudioFilters.getFilteringSummary(this._subtitles);
-
-    // Calculate estimated file size
-    const estimatedSize = AudioEncoder.estimateFileSize(summary.speechDuration, 128);
-
-    // Show confirmation dialog
-    AudioDownloadUI.showConfirmation(
-      {
-        totalDuration: video.duration,
-        speechDuration: summary.speechDuration,
-        segmentCount: mergedSegments.length,
-        removedCount: summary.nonVerbalSegments,
-        removedTypes: summary.nonVerbalTypes,
-        estimatedSize: estimatedSize
-      },
-      // onConfirm
-      async () => {
-        await this._startAudioRecording(video, mergedSegments);
-      },
-      // onCancel
-      () => {
-        console.info('DualSubExtension: Audio download cancelled by user');
-      }
-    );
+    // Start recording directly without modal
+    await this._startYLERecording(video, speechSegments);
   },
 
   /**
@@ -997,7 +674,7 @@ const ControlIntegration = {
       return;
     }
 
-    const video = ControlActions.getVideoElement(this._platform);
+    const video = ControlActions.getVideoElement();
     if (!video) {
       AudioDownloadUI.showError('No video found on this page');
       return;
@@ -1547,12 +1224,11 @@ const ControlIntegration = {
     // Try to get video title from page
     let title = 'audio';
 
-    // Try different sources for title
+    // Try different sources for title (YLE-specific)
     const titleSources = [
       () => document.querySelector('title')?.textContent,
       () => document.querySelector('h1')?.textContent,
-      () => document.querySelector('[class*="title"]')?.textContent,
-      () => document.querySelector('.ytp-title-link')?.textContent
+      () => document.querySelector('[class*="title"]')?.textContent
     ];
 
     for (const getTitle of titleSources) {

@@ -83,8 +83,7 @@ export default [
             '**/.docusaurus/**',
             '**/dist/**',
             '**/build/**',
-            // Legacy injected scripts
-            'injected.js',
+            // Legacy injected scripts (inject.js runs in page context, not extension context)
             'inject.js'
         ]
     }

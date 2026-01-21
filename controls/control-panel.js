@@ -1,7 +1,7 @@
 /**
  * Control Panel Module
  *
- * Unified control panel that works consistently across all platforms.
+ * Control panel for YLE Areena.
  * Uses ControlIcons, ControlActions, and ControlKeyboard modules.
  */
 
@@ -11,17 +11,16 @@ class ControlPanel {
   /**
    * Create a control panel
    * @param {Object} options
-   * @param {string} options.platform - 'yle' | 'youtube' | 'html5'
    * @param {Object} [options.callbacks] - Callback functions for control events
    * @param {Object} [options.initialState] - Initial state values
    */
   constructor(options) {
-    this.platform = options.platform;
     this.element = null;
     this.keyboard = null;
     this._mounted = false;
 
     // State tracked by panel
+    // Simplified: no auto-disable logic, user controls everything
     this.state = Object.assign({
       dualSubEnabled: false,
       autoPauseEnabled: false,
@@ -31,11 +30,7 @@ class ControlPanel {
       availableLanguages: [],
       showWarning: false,
       warningMessage: '',
-      extensionEnabled: true,
-      activationReason: null,  // 'active', 'same_language', 'no_subtitles', 'manually_disabled'
-      isActive: false,
-      captionsEnabled: false,     // Whether native CC is ON
-      translationNeeded: false    // Whether source != target
+      extensionEnabled: true
     }, options.initialState || {});
 
     // Callbacks for all controls
@@ -58,40 +53,16 @@ class ControlPanel {
   }
 
   /**
-   * Get mount configuration for the platform
+   * Get mount configuration for YLE
    * @returns {Object}
    */
   getMountConfig() {
-    switch (this.platform) {
-      case 'yle':
-        return {
-          selector: '[class^="BottomControlBar__LeftControls"]',
-          insertMethod: 'append',
-          style: 'integrated',
-          hideOnInactive: true
-        };
-      case 'youtube':
-        return {
-          selector: '.ytp-left-controls',
-          insertMethod: 'append',
-          style: 'integrated',
-          hideOnInactive: false
-        };
-      case 'html5':
-        return {
-          selector: null,
-          insertMethod: 'float',
-          style: 'floating',
-          hideOnInactive: true
-        };
-      default:
-        return {
-          selector: null,
-          insertMethod: 'float',
-          style: 'floating',
-          hideOnInactive: true
-        };
-    }
+    return {
+      selector: '[class^="BottomControlBar__LeftControls"]',
+      insertMethod: 'append',
+      style: 'integrated',
+      hideOnInactive: true
+    };
   }
 
   /**
@@ -127,19 +98,6 @@ class ControlPanel {
       }
     }
 
-    if (!target && config.style === 'floating') {
-      // For floating style, mount to video parent
-      const video = ControlActions.getVideoElement(this.platform);
-      if (video && video.parentElement) {
-        target = video.parentElement;
-        // Make container position relative for absolute positioning
-        const computedStyle = window.getComputedStyle(target);
-        if (computedStyle.position === 'static') {
-          target.style.position = 'relative';
-        }
-      }
-    }
-
     if (!target) {
       // Log as warning instead of error - mounting will be retried
       console.warn('DualSubExtension: Mount target not found yet, will retry');
@@ -154,10 +112,6 @@ class ControlPanel {
       case 'prepend':
         target.insertBefore(this.element, target.firstChild);
         break;
-      case 'float':
-        target.appendChild(this.element);
-        this._setupFloatingBehavior(target);
-        break;
     }
 
     // Setup event handlers
@@ -167,7 +121,7 @@ class ControlPanel {
     this._setupKeyboard();
 
     this._mounted = true;
-    console.info('DualSubExtension: Control panel mounted for platform:', this.platform);
+    console.info('DualSubExtension: Control panel mounted for YLE Areena');
 
     return this.element;
   }
@@ -206,13 +160,8 @@ class ControlPanel {
    */
   _createPanel() {
     const panel = document.createElement('div');
-    panel.className = `dsc-panel dsc-${this.platform}`;
+    panel.className = 'dsc-panel dsc-yle';
     panel.id = 'dsc-control-panel';
-
-    const config = this.getMountConfig();
-    if (config.style === 'floating') {
-      panel.classList.add('dsc-floating');
-    }
 
     // Build the panel content
     panel.innerHTML = this._getPanelHTML();
@@ -220,32 +169,16 @@ class ControlPanel {
     return panel;
   }
 
-  /**
-   * Get status badge text based on activation reason
-   * Simplified: no status badges needed, just ON/OFF toggle
-   * @returns {string}
-   */
-  _getStatusBadgeText() {
-    // User requested: no need to show why it's off
-    // The toggle state is self-explanatory
-    return '';
-  }
-
-  /**
-   * Get status badge CSS class based on activation reason
-   * Simplified: no status badges needed
-   * @returns {string}
-   */
-  _getStatusBadgeClass() {
-    return '';
-  }
+  // REMOVED: _getStatusBadgeText() and _getStatusBadgeClass()
+  // No status badges needed - user controls everything manually
 
   /**
    * Get the panel HTML
+   * Simplified: no blocking/disabled states, user controls everything
    * @returns {string}
    */
   _getPanelHTML() {
-    const { dualSubEnabled, autoPauseEnabled, playbackSpeed, showWarning, extensionEnabled, isActive, captionsEnabled, translationNeeded } = this.state;
+    const { dualSubEnabled, autoPauseEnabled, playbackSpeed, showWarning, extensionEnabled } = this.state;
 
     // Build speed options
     const speeds = [0.5, 0.75, 1, 1.25, 1.5, 1.75, 2];
@@ -253,24 +186,15 @@ class ControlPanel {
       .map(s => `<option value="${s}" ${s === playbackSpeed ? 'selected' : ''}>${s}x</option>`)
       .join('');
 
-    const statusBadgeText = this._getStatusBadgeText();
-    const statusBadgeClass = this._getStatusBadgeClass();
-    // Features (skip/repeat/speed/download) are only disabled when extension is OFF
-    // NOT when same language - user should still be able to use playback features
+    // Features are only disabled when extension is OFF
     const featuresDisabled = !extensionEnabled;
-    // Dual sub toggle is disabled when translation is not needed (same language)
-    const dualSubDisabled = !translationNeeded;
-
-    // Show extension toggle state - when CC is off, show as blocked but preserve ON/OFF state
-    // This way when CC turns back on, extension will resume if it was on before
 
     return `
       <div class="dsc-group dsc-master-toggle">
-        <label class="dsc-switch dsc-switch-master ${extensionEnabled ? 'active' : ''} ${!captionsEnabled ? 'dsc-switch-blocked' : ''}" id="dsc-extension-toggle" title="${captionsEnabled ? 'Enable/disable extension' : 'Turn on captions first'}">
-          <input type="checkbox" id="dsc-extension-checkbox" ${extensionEnabled ? 'checked' : ''} ${!captionsEnabled ? 'disabled' : ''}>
+        <label class="dsc-switch dsc-switch-master ${extensionEnabled ? 'active' : ''}" id="dsc-extension-toggle" title="Enable/disable extension">
+          <input type="checkbox" id="dsc-extension-checkbox" ${extensionEnabled ? 'checked' : ''}>
           <span class="dsc-switch-knob"></span>
         </label>
-        ${statusBadgeText ? `<span class="dsc-status ${statusBadgeClass}" id="dsc-status-badge">${statusBadgeText}</span>` : ''}
       </div>
 
       <span class="dsc-separator"></span>
@@ -285,8 +209,8 @@ class ControlPanel {
 
       <div class="dsc-group dsc-dual-sub">
         <span class="dsc-label">DS</span>
-        <label class="dsc-switch ${dualSubEnabled ? 'active' : ''} ${dualSubDisabled ? 'dsc-switch-disabled' : ''}" id="dsc-dual-sub-toggle" title="${dualSubDisabled ? 'Same language - no translation needed' : 'Toggle dual subtitles (D)'}">
-          <input type="checkbox" id="dsc-dual-sub-checkbox" ${dualSubEnabled ? 'checked' : ''} ${dualSubDisabled ? 'disabled' : ''}>
+        <label class="dsc-switch ${dualSubEnabled ? 'active' : ''}" id="dsc-dual-sub-toggle" title="Toggle dual subtitles (D)">
+          <input type="checkbox" id="dsc-dual-sub-checkbox" ${dualSubEnabled ? 'checked' : ''}>
           <span class="dsc-switch-knob"></span>
         </label>
         ${showWarning ? `
@@ -346,11 +270,10 @@ class ControlPanel {
    * Setup event handlers for controls
    */
   _setupEventHandlers() {
-    // Store element references
+    // Store element references (simplified - no statusBadge)
     this._elements = {
       extensionToggle: this.element.querySelector('#dsc-extension-toggle'),
       extensionCheckbox: this.element.querySelector('#dsc-extension-checkbox'),
-      statusBadge: this.element.querySelector('#dsc-status-badge'),
       featuresContainer: this.element.querySelector('.dsc-features'),
       dualSubToggle: this.element.querySelector('#dsc-dual-sub-toggle'),
       dualSubCheckbox: this.element.querySelector('#dsc-dual-sub-checkbox'),
@@ -477,18 +400,13 @@ class ControlPanel {
    * Setup keyboard handler
    */
   _setupKeyboard() {
-    const config = ControlKeyboard.getDefaultConfig(this.platform);
+    const config = ControlKeyboard.getDefaultConfig();
 
     this.keyboard = new ControlKeyboard({
-      platform: this.platform,
       config: config,
       callbacks: {
         onDualSubToggle: () => {
-          // Don't allow toggle if translation is not needed (same language)
-          if (!this.state.translationNeeded) {
-            console.info('DualSubExtension: Dual sub toggle ignored - same language');
-            return;
-          }
+          // Simplified: no restrictions, user controls everything
           const newState = !this.state.dualSubEnabled;
           this.state.dualSubEnabled = newState;
           if (this._elements.dualSubCheckbox) {
@@ -542,57 +460,29 @@ class ControlPanel {
   }
 
   /**
-   * Setup floating behavior for HTML5 videos
-   * @param {HTMLElement} container
-   */
-  _setupFloatingBehavior(container) {
-    // Show panel on hover
-    container.addEventListener('mouseenter', () => {
-      this.element.classList.add('visible');
-    });
-
-    container.addEventListener('mouseleave', () => {
-      this.element.classList.remove('visible');
-    });
-  }
-
-  /**
    * Sync UI elements with current state
+   * Simplified: no blocking/disabled states
    */
   _syncUI() {
     if (!this._mounted) return;
 
-    // Sync extension toggle - show actual state, blocked when CC is OFF
+    // Sync extension toggle
     if (this._elements.extensionCheckbox) {
       this._elements.extensionCheckbox.checked = this.state.extensionEnabled;
-      this._elements.extensionCheckbox.disabled = !this.state.captionsEnabled;
     }
     if (this._elements.extensionToggle) {
       this._elements.extensionToggle.classList.toggle('active', this.state.extensionEnabled);
-      this._elements.extensionToggle.classList.toggle('dsc-switch-blocked', !this.state.captionsEnabled);
-      this._elements.extensionToggle.title = this.state.captionsEnabled
-        ? 'Enable/disable extension'
-        : 'Turn on captions first';
     }
-
-    // Update status badge
-    this._updateStatusBadge();
 
     // Update features disabled state
     this._updateFeaturesDisabledState();
 
-    // Sync dual sub toggle - disabled when translation is not needed
-    const dualSubDisabled = !this.state.translationNeeded;
+    // Sync dual sub toggle
     if (this._elements.dualSubCheckbox) {
       this._elements.dualSubCheckbox.checked = this.state.dualSubEnabled;
-      this._elements.dualSubCheckbox.disabled = dualSubDisabled;
     }
     if (this._elements.dualSubToggle) {
       this._elements.dualSubToggle.classList.toggle('active', this.state.dualSubEnabled);
-      this._elements.dualSubToggle.classList.toggle('dsc-switch-disabled', dualSubDisabled);
-      this._elements.dualSubToggle.title = dualSubDisabled
-        ? 'Same language - no translation needed'
-        : 'Toggle dual subtitles (D)';
     }
 
     // Sync auto-pause toggle
@@ -614,48 +504,16 @@ class ControlPanel {
     }
   }
 
-  /**
-   * Update the status badge based on activation reason
-   */
-  _updateStatusBadge() {
-    if (!this._elements.statusBadge) {
-      // Badge might not exist if status is 'active'
-      const badgeText = this._getStatusBadgeText();
-      if (badgeText && this._elements.extensionToggle) {
-        // Create badge if needed
-        const badge = document.createElement('span');
-        badge.className = `dsc-status ${this._getStatusBadgeClass()}`;
-        badge.id = 'dsc-status-badge';
-        badge.textContent = badgeText;
-        this._elements.extensionToggle.parentNode.appendChild(badge);
-        this._elements.statusBadge = badge;
-      }
-      return;
-    }
-
-    const badgeText = this._getStatusBadgeText();
-    const badgeClass = this._getStatusBadgeClass();
-
-    if (badgeText) {
-      this._elements.statusBadge.textContent = badgeText;
-      this._elements.statusBadge.className = `dsc-status ${badgeClass}`;
-      this._elements.statusBadge.style.display = '';
-    } else {
-      this._elements.statusBadge.style.display = 'none';
-    }
-  }
+  // REMOVED: _updateStatusBadge() - no status badges needed
 
   /**
    * Update the disabled state of the features container
-   * Features (skip/repeat/speed/download) are only disabled when extension is OFF
-   * NOT when same language - user should still be able to use playback features
+   * Features are only disabled when extension is OFF
    */
   _updateFeaturesDisabledState() {
     if (!this._elements.featuresContainer) return;
 
-    const { extensionEnabled } = this.state;
-    const shouldDisable = !extensionEnabled;
-
+    const shouldDisable = !this.state.extensionEnabled;
     this._elements.featuresContainer.classList.toggle('dsc-disabled', shouldDisable);
   }
 
@@ -663,7 +521,7 @@ class ControlPanel {
    * Focus the video player
    */
   _focusPlayer() {
-    ControlActions.focusPlayer(this.platform);
+    ControlActions.focusPlayer();
   }
 
   /**

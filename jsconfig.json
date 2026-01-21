@@ -49,7 +49,6 @@
     "**/.docusaurus",
     "**/dist",
     "**/build",
-    "**/.vite",
-    "injected.js"
+    "**/.vite"
   ]
 }

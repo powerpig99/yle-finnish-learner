@@ -510,8 +510,8 @@ body.yle-mouse-active nav[class*="Navigation_root"] {
   left: 0 !important;
   right: 0 !important;
   width: 100% !important;
-  /* Center the text */
-  display: flex !important;
+  /* Center the text - NOTE: NO !important to allow JS to control visibility */
+  display: flex;
   flex-direction: column !important;
   align-items: center !important;
   /* Reset any transforms/zoom */
@@ -520,40 +520,6 @@ body.yle-mouse-active nav[class*="Navigation_root"] {
 }
 
 /* Font sizes are set dynamically via JavaScript based on user settings */
-
-/* ============================================
-   YouTube-specific styles
-   ============================================ */
-
-/* Ensure YouTube left controls can show our extension */
-.ytp-left-controls {
-  overflow: visible !important;
-}
-
-/* YouTube subtitle wrapper - use flex positioning instead of absolute */
-#movie_player #dual-sub-overlay #displayed-subtitles-wrapper,
-.html5-video-player #dual-sub-overlay #displayed-subtitles-wrapper {
-  position: relative !important;
-  bottom: auto !important;
-  left: auto !important;
-  right: auto !important;
-  width: auto !important;
-}
-
-/* YouTube dual sub extension section */
-.dual-sub-extension-section.dual-sub-youtube {
-  display: flex !important;
-  align-items: center !important;
-  opacity: 1 !important;
-  visibility: visible !important;
-  pointer-events: auto !important;
-}
-
-/* Make sure our controls are visible in fullscreen too */
-.ytp-fullscreen .dual-sub-extension-section.dual-sub-youtube {
-  display: flex !important;
-  opacity: 1 !important;
-}
 
 /* ============================================
    Unified Control Panel Styles (dsc-* prefix)
@@ -897,11 +863,9 @@ body.yle-mouse-active nav[class*="Navigation_root"] {
 }
 
 /* ============================================
-   Platform-specific overrides (minimal)
-   Only differences needed for each platform's player
+   YLE Areena Control Panel
+   Show/hide with mouse activity
    ============================================ */
-
-/* YLE: Show/hide with mouse activity */
 div[class*="PlayerUI__UI"] .dsc-panel.dsc-yle {
   opacity: 0 !important;
   transition: opacity 0.3s ease !important;
@@ -911,38 +875,6 @@ div[class*="PlayerUI__UI"] .dsc-panel.dsc-yle {
 div[class*="PlayerUI__UI"].yle-mouse-active .dsc-panel.dsc-yle {
   opacity: 1 !important;
   pointer-events: auto !important;
-}
-
-/* YouTube: Position within control bar */
-.dsc-panel.dsc-youtube {
-  margin-left: 8px;
-  padding-left: 12px;
-  border-left: 1px solid rgba(255, 255, 255, 0.2);
-  flex-shrink: 0;
-}
-
-/* YouTube fullscreen support */
-.ytp-fullscreen .dsc-panel.dsc-youtube {
-  display: flex !important;
-}
-
-/* HTML5: Floating panel style */
-.dsc-panel.dsc-html5.dsc-floating {
-  position: absolute;
-  bottom: 50px;
-  left: 50%;
-  transform: translateX(-50%);
-  background: rgba(0, 0, 0, 0.85);
-  padding: 8px 16px;
-  border-radius: 8px;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
-  z-index: 9999;
-  opacity: 0;
-  transition: opacity 0.3s ease;
-}
-
-.dsc-panel.dsc-html5.dsc-floating.visible {
-  opacity: 1;
 }
 
 /* ============================================

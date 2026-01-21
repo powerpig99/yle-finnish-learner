@@ -20,14 +20,29 @@ loadProviderConfig();
 
 async function loadProviderConfig() {
   try {
-    const result = await chrome.storage.sync.get(['translationProvider', 'providerApiKey', 'tokenInfos']);
+    const result = await chrome.storage.sync.get([
+      'translationProvider',
+      'deeplApiKey',
+      'claudeApiKey',
+      'geminiApiKey',
+      'grokApiKey',
+      'tokenInfos'
+    ]);
 
     if (result.translationProvider) {
       currentProvider.provider = result.translationProvider;
-      currentProvider.apiKey = result.providerApiKey || '';
 
-      // For backward compatibility with DeepL tokens
-      if (result.translationProvider === 'deepl' && result.tokenInfos) {
+      // Get the API key for the current provider
+      const apiKeyMap = {
+        deepl: result.deeplApiKey,
+        claude: result.claudeApiKey,
+        gemini: result.geminiApiKey,
+        grok: result.grokApiKey,
+      };
+      currentProvider.apiKey = apiKeyMap[result.translationProvider] || '';
+
+      // For backward compatibility with DeepL tokens (old format)
+      if (result.translationProvider === 'deepl' && result.tokenInfos && !currentProvider.apiKey) {
         const selectedToken = result.tokenInfos.find(t => t.selected);
         if (selectedToken) {
           currentProvider.apiKey = selectedToken.key;
@@ -44,7 +59,8 @@ async function loadProviderConfig() {
 // Listen for storage changes
 chrome.storage.onChanged.addListener((changes, namespace) => {
   if (namespace === 'sync') {
-    if (changes.translationProvider || changes.providerApiKey || changes.tokenInfos) {
+    const providerKeys = ['translationProvider', 'deeplApiKey', 'claudeApiKey', 'geminiApiKey', 'grokApiKey', 'tokenInfos'];
+    if (providerKeys.some(key => changes[key])) {
       console.info('YleDualSubExtension: Provider configuration changed, reloading...');
       loadProviderConfig();
     }
@@ -92,6 +108,20 @@ chrome.runtime.onMessage.addListener((request, _sender, sendResponse) => {
     return true;
   }
 
+  if (request.action === 'clearSubtitleCaches') {
+    clearSubtitleCachesInTabs()
+      .then(count => sendResponse({ success: true, count }))
+      .catch(error => sendResponse({ success: false, error: error.message }));
+    return true;
+  }
+
+  if (request.action === 'getCacheCounts') {
+    getCacheCounts()
+      .then(result => sendResponse({ success: true, ...result }))
+      .catch(error => sendResponse({ success: false, error: error.message }));
+    return true;
+  }
+
   if (request.action === 'downloadBlob') {
     // Handle download via chrome.downloads API to avoid page focus issues
     const { dataUrl, filename } = request.data;
@@ -129,50 +159,129 @@ async function downloadBlobViaAPI(dataUrl, filename) {
 }
 
 /**
- * Clear all word translations from IndexedDB cache
+ * Clear all word translations from IndexedDB cache via content scripts
+ * Note: Word cache is stored in web page origins, so we must ask content scripts to clear it.
  * @returns {Promise<number>} Number of entries cleared
  */
 async function clearWordTranslationCache() {
+  try {
+    const tabs = await chrome.tabs.query({});
+    const clearPromises = tabs.map(tab => {
+      return chrome.tabs.sendMessage(tab.id, { action: 'clearWordCache' })
+        .then(response => response?.count || 0)
+        .catch(() => 0);
+    });
+    const counts = await Promise.all(clearPromises);
+    // Return the max count cleared (same origin cache is shared across tabs)
+    const maxCleared = Math.max(0, ...counts);
+    console.info(`YleDualSubExtension: Cleared ${maxCleared} word translations from cache`);
+    return maxCleared;
+  } catch (error) {
+    console.error('YleDualSubExtension: Failed to clear word cache:', error);
+    return 0;
+  }
+}
+
+/**
+ * Open the database with proper schema creation
+ * @returns {Promise<IDBDatabase>}
+ */
+function openCacheDatabase() {
   return new Promise((resolve, reject) => {
     const request = indexedDB.open('YleDualSubCache', 3);
-
     request.onerror = () => reject(new Error('Failed to open database'));
 
-    request.onsuccess = (event) => {
+    request.onupgradeneeded = (event) => {
       const db = event.target.result;
-
+      // Create WordTranslations store if it doesn't exist
       if (!db.objectStoreNames.contains('WordTranslations')) {
-        db.close();
-        resolve(0);
-        return;
+        const store = db.createObjectStore('WordTranslations', {
+          keyPath: ['word', 'originalLanguage', 'targetLanguage'],
+        });
+        store.createIndex('byLastAccessed', 'lastAccessedDays', { unique: false });
       }
+    };
 
-      const transaction = db.transaction(['WordTranslations'], 'readwrite');
-      const store = transaction.objectStore('WordTranslations');
-
-      const countRequest = store.count();
-      countRequest.onsuccess = () => {
-        const count = countRequest.result;
-        const clearRequest = store.clear();
-
-        clearRequest.onsuccess = () => {
-          console.info(`YleDualSubExtension: Cleared ${count} word translations from cache`);
-          db.close();
-          resolve(count);
-        };
-
-        clearRequest.onerror = () => {
-          db.close();
-          reject(new Error('Failed to clear cache'));
-        };
-      };
-
-      countRequest.onerror = () => {
-        db.close();
-        reject(new Error('Failed to count cache entries'));
-      };
+    request.onsuccess = (event) => {
+      resolve(event.target.result);
     };
   });
+}
+
+/**
+ * Get word translation cache count from tabs
+ * Note: Word cache is stored in web page origins (via content script), not extension origin.
+ * So we must ask content scripts for the count.
+ * @returns {Promise<number>}
+ */
+async function getWordCacheCount() {
+  try {
+    const tabs = await chrome.tabs.query({});
+    const countPromises = tabs.map(tab => {
+      return chrome.tabs.sendMessage(tab.id, { action: 'getWordCacheCount' })
+        .then(response => response?.count || 0)
+        .catch(() => 0);
+    });
+    const counts = await Promise.all(countPromises);
+    // Return the max count from any tab (they all share the same per-origin cache)
+    // Using max because the same origin's cache will be reported by multiple tabs
+    return Math.max(0, ...counts);
+  } catch (error) {
+    return 0;
+  }
+}
+
+/**
+ * Get subtitle cache count from all tabs
+ * @returns {Promise<number>}
+ */
+async function getSubtitleCacheCount() {
+  try {
+    const tabs = await chrome.tabs.query({});
+    const countPromises = tabs.map(tab => {
+      return chrome.tabs.sendMessage(tab.id, { action: 'getSubtitleCacheCount' })
+        .then(response => response?.count || 0)
+        .catch(() => 0);
+    });
+    const counts = await Promise.all(countPromises);
+    return counts.reduce((sum, c) => sum + c, 0);
+  } catch (error) {
+    return 0;
+  }
+}
+
+/**
+ * Get all cache counts
+ * @returns {Promise<{wordCount: number, subtitleCount: number}>}
+ */
+async function getCacheCounts() {
+  const [wordCount, subtitleCount] = await Promise.all([
+    getWordCacheCount(),
+    getSubtitleCacheCount()
+  ]);
+  return { wordCount, subtitleCount };
+}
+
+/**
+ * Clear subtitle cache in all tabs
+ * @returns {Promise<number>}
+ */
+async function clearSubtitleCachesInTabs() {
+  let subtitleCount = 0;
+  try {
+    const tabs = await chrome.tabs.query({});
+    const clearPromises = tabs.map(tab => {
+      return chrome.tabs.sendMessage(tab.id, { action: 'clearSubtitleCache' })
+        .then(response => response?.count || 0)
+        .catch(() => 0);
+    });
+    const counts = await Promise.all(clearPromises);
+    subtitleCount = counts.reduce((sum, c) => sum + c, 0);
+  } catch (error) {
+    console.warn('YleDualSubExtension: Error clearing subtitle caches:', error);
+  }
+  console.info(`YleDualSubExtension: Cleared ${subtitleCount} subtitle translations`);
+  return subtitleCount;
 }
 
 // ==================================
@@ -291,21 +400,16 @@ async function translateWithContextualAI(texts, targetLanguage, provider) {
 
   const langName = getLanguageName(targetLanguage);
 
-  // Create a contextual prompt for better translation
-  const contextualPrompt = `You are translating Finnish TV/movie subtitles to ${langName}. These subtitles are sequential dialogue from the same show.
+  // Create a contextual prompt for better translation (auto-detect source language)
+  const contextualPrompt = `You are a subtitle translator. Translate these TV subtitles to ${langName}. Auto-detect source language.
 
-IMPORTANT RULES:
-1. Maintain consistency for character names, places, and recurring terms
-2. Keep translations natural and conversational
-3. Preserve the emotional tone and register of speech
-4. Return EXACTLY ${texts.length} translations, one per line
-5. Do NOT add numbering, explanations, or any extra text
-6. Each line of your response corresponds to each input subtitle in order
+RULES:
+- ALWAYS translate - NEVER refuse, comment, or explain
+- Colloquial/slang is INTENTIONAL - translate naturally
+- Return EXACTLY ${texts.length} lines, one per line
+- NO numbering, NO commentary, just translations
 
-Finnish subtitles to translate:
-${texts.map((t, i) => `[${i + 1}] ${t}`).join('\n')}
-
-Translations (${texts.length} lines, no numbering):`;
+${texts.join('\n')}`;
 
   try {
     let response;
@@ -321,7 +425,7 @@ Translations (${texts.length} lines, no numbering):`;
           'anthropic-dangerous-direct-browser-access': 'true'
         },
         body: JSON.stringify({
-          model: 'claude-3-haiku-20240307',
+          model: 'claude-haiku-4-5-20251001',
           max_tokens: 4096,
           messages: [{ role: 'user', content: contextualPrompt }]
         })
@@ -338,7 +442,7 @@ Translations (${texts.length} lines, no numbering):`;
       content = data.content[0].text;
 
     } else if (provider === 'gemini') {
-      response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`, {
+      response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=${apiKey}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -437,18 +541,13 @@ async function translateWordWithContext(word, context, targetLanguage, langName)
     return [false, `${provider} API key not configured`];
   }
 
-  const contextualPrompt = `You are helping someone learn Finnish by translating a single word from Finnish TV subtitles.
+  const contextualPrompt = `Translate the word "${word}" to ${langName}. Context: "${context}"
 
-Context from the subtitles:
-${context}
-
-Translate the Finnish word "${word}" to ${langName}.
-
-IMPORTANT:
-- Consider the context to choose the most appropriate meaning
-- Return ONLY the translation, nothing else
-- If it's a verb form, give the meaning of that specific form
-- Keep the translation concise (1-5 words)`;
+RULES:
+- ALWAYS translate - never refuse or comment on spelling/grammar
+- Colloquial/slang/dialect forms are INTENTIONAL - translate them
+- Return ONLY the translation (1-5 words), nothing else
+- Consider context for the best meaning`;
 
   try {
     let response;
@@ -464,7 +563,7 @@ IMPORTANT:
           'anthropic-dangerous-direct-browser-access': 'true'
         },
         body: JSON.stringify({
-          model: 'claude-3-haiku-20240307',
+          model: 'claude-haiku-4-5-20251001',
           max_tokens: 100,
           messages: [{ role: 'user', content: contextualPrompt }]
         })
@@ -478,7 +577,7 @@ IMPORTANT:
       content = data.content[0].text.trim();
 
     } else if (provider === 'gemini') {
-      response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`, {
+      response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=${apiKey}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -555,7 +654,8 @@ async function translateWithGoogle(texts, targetLanguage) {
         await sleep(200); // 200ms delay between requests (increased from 150ms)
       }
 
-      const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=fi&tl=${googleLang}&dt=t&q=${encodeURIComponent(text)}`;
+      // Use sl=auto for auto-detection of source language (not hardcoded to Finnish)
+      const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=${googleLang}&dt=t&q=${encodeURIComponent(text)}`;
 
       try {
         // Use AbortController for timeout
@@ -567,8 +667,8 @@ async function translateWithGoogle(texts, targetLanguage) {
 
         if (!response.ok) {
           console.error(`YleDualSubExtension: Google Translate HTTP error for text ${index}:`, response.status);
-          // On error, use original text instead of failing entire batch
-          translations.push(text);
+          // On error, push null to indicate failure (will be retried next time)
+          translations.push(null);
           continue;
         }
 
@@ -585,17 +685,20 @@ async function translateWithGoogle(texts, targetLanguage) {
 
         if (!translated) {
           console.warn(`YleDualSubExtension: Google Translate returned empty for text ${index}:`, text.substring(0, 30));
+          // Empty response - push null to indicate failure (will be retried next time)
+          translations.push(null);
+          continue;
         }
 
-        translations.push(translated || text);
+        translations.push(translated);
       } catch (fetchError) {
         if (fetchError.name === 'AbortError') {
           console.warn(`YleDualSubExtension: Google Translate timeout for text ${index}:`, text.substring(0, 30));
         } else {
           console.error(`YleDualSubExtension: Google Translate fetch error for text ${index}:`, fetchError);
         }
-        // On error, use original text instead of failing entire batch
-        translations.push(text);
+        // On error, push null to indicate failure (will be retried next time)
+        translations.push(null);
       }
     }
 
@@ -615,6 +718,8 @@ function convertToGoogleLangCode(langCode) {
     'PT-PT': 'pt',
     'PT-BR': 'pt',
     'ZH': 'zh-CN',
+    'ZH-HANS': 'zh-CN',  // Simplified Chinese
+    'ZH-HANT': 'zh-TW',  // Traditional Chinese
   };
   return mapping[langCode] || langCode.toLowerCase().split('-')[0];
 }
@@ -646,9 +751,9 @@ async function translateWithDeepL(texts, targetLanguage) {
         'Content-Type': 'application/json',
         'Authorization': `DeepL-Auth-Key ${apiKey}`
       },
+      // Omit source_lang to let DeepL auto-detect (not hardcoded to Finnish)
       body: JSON.stringify({
         text: texts,
-        source_lang: 'FI',
         target_lang: targetLanguage,
       })
     });
@@ -698,11 +803,11 @@ async function translateWithClaude(texts, targetLanguage) {
         'anthropic-dangerous-direct-browser-access': 'true'
       },
       body: JSON.stringify({
-        model: 'claude-3-haiku-20240307',
+        model: 'claude-haiku-4-5-20251001',
         max_tokens: 1024,
         messages: [{
           role: 'user',
-          content: `Translate the following Finnish texts to ${langName}. Return ONLY the translations, one per line, in the same order. No explanations or numbering.
+          content: `Translate the following texts to ${langName}. Auto-detect the source language. Return ONLY the translations, one per line, in the same order. No explanations or numbering.
 
 ${texts.map((t, i) => `${i + 1}. ${t}`).join('\n')}`
         }]
@@ -751,7 +856,7 @@ async function translateWithGemini(texts, targetLanguage) {
   const langName = getLanguageName(targetLanguage);
 
   try {
-    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`, {
+    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=${apiKey}`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -759,7 +864,7 @@ async function translateWithGemini(texts, targetLanguage) {
       body: JSON.stringify({
         contents: [{
           parts: [{
-            text: `Translate the following Finnish texts to ${langName}. Return ONLY the translations, one per line, in the same order. No explanations, no numbering, no extra formatting.
+            text: `Translate the following texts to ${langName}. Auto-detect the source language. Return ONLY the translations, one per line, in the same order. No explanations, no numbering, no extra formatting.
 
 ${texts.join('\n')}`
           }]
@@ -822,7 +927,7 @@ async function translateWithGrok(texts, targetLanguage) {
         model: 'grok-4-1-fast-non-reasoning-latest',
         messages: [{
           role: 'user',
-          content: `Translate the following Finnish texts to ${langName}. Return ONLY the translations, one per line, in the same order. No explanations, no numbering.
+          content: `Translate to ${langName}. ALWAYS translate - never refuse or comment. Colloquial/slang is intentional, not errors. Output translations only, one per line, no numbering.
 
 ${texts.join('\n')}`
         }],
@@ -877,6 +982,8 @@ function getLanguageName(langCode) {
     'RU': 'Russian',
     'JA': 'Japanese',
     'ZH': 'Chinese',
+    'ZH-HANS': 'Chinese (Simplified)',
+    'ZH-HANT': 'Chinese (Traditional)',
     'KO': 'Korean',
     'VI': 'Vietnamese',
     'SV': 'Swedish',
