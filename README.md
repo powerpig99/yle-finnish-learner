@@ -45,7 +45,8 @@ A Chrome extension for learning Finnish through YLE Areena (Finnish public broad
 ## Installation
 
 ### Chrome Web Store
-*Coming soon*
+
+[**Install from Chrome Web Store**](https://chromewebstore.google.com/detail/yle-finnish-learner/iiganofenpnkdhnmjjmfoilobopapmnj)
 
 ### Manual Installation
 
@@ -143,7 +144,7 @@ Contributions welcome! Please open issues for bugs or feature requests.
 
 ## License
 
-GPL v3 (GNU General Public License v3)
+[GPL v3](LICENSE) (GNU General Public License v3)
 
 ## Acknowledgments
 

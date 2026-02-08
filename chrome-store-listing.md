@@ -76,7 +76,7 @@ Take these manually in Chrome:
 ---
 
 ## Store Listing URL (after publishing)
-https://chrome.google.com/webstore/detail/yle-finnish-learner/[YOUR_EXTENSION_ID]
+https://chromewebstore.google.com/detail/yle-finnish-learner/iiganofenpnkdhnmjjmfoilobopapmnj
 
 ---
 
