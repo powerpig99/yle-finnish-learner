@@ -130,7 +130,7 @@ function addContentToDisplayedSubtitlesWrapper(displayedSubtitlesWrapper, origin
         return;
     }
     const spanClassName = originalSubtitlesWrapperSpans[0].className;
-    const finnishText = Array.from(originalSubtitlesWrapperSpans).map((span) => span.innerText).join(" ")
+    const finnishText = Array.from(originalSubtitlesWrapperSpans).map((span) => (span.textContent || '')).join(" ")
         .replace(/\n/g, " ")
         .replace(/\s+/g, " ")
         .trim();
@@ -234,7 +234,7 @@ function handleSubtitlesWrapperMutation(mutation) {
         const finnishTextSpans = mutation.target.querySelectorAll("span");
         // Get the current Finnish text
         const currentFinnishText = Array.from(finnishTextSpans)
-            .map((span) => span.innerText)
+            .map((span) => (span.textContent || ''))
             .join(" ")
             .replace(/\n/g, " ")
             .replace(/\s+/g, " ")
@@ -341,32 +341,35 @@ function setupYleWrapperStyleObserver(wrapper) {
     console.info('DualSubExtension: YLE wrapper style observer initialized, visible:', yleWrapperWasVisible);
     yleWrapperStyleObserver = new MutationObserver((mutations) => {
         for (const mutation of mutations) {
-            if (mutation.attributeName === 'style') {
-                const isVisible = getComputedStyle(wrapper).display !== 'none';
-                if (yleWrapperWasVisible && !isVisible) {
-                    // CC turned OFF
-                    console.info('DualSubExtension: YLE CC turned OFF (wrapper hidden)');
-                    yleWrapperWasVisible = false;
-                    document.dispatchEvent(new CustomEvent('yleNativeCaptionsToggled', {
-                        bubbles: true,
-                        detail: { enabled: false }
-                    }));
-                }
-                else if (!yleWrapperWasVisible && isVisible) {
-                    // CC turned ON
-                    console.info('DualSubExtension: YLE CC turned ON (wrapper shown)');
-                    yleWrapperWasVisible = true;
-                    document.dispatchEvent(new CustomEvent('yleNativeCaptionsToggled', {
-                        bubbles: true,
-                        detail: { enabled: true }
-                    }));
-                }
+            // Log all attribute changes for diagnostic purposes
+            console.info('DualSubExtension: Wrapper attribute changed:', mutation.attributeName, 'old:', mutation.oldValue, 'new:', wrapper.getAttribute(mutation.attributeName || ''), 'computedDisplay:', getComputedStyle(wrapper).display);
+            // Check computed display on ANY attribute change (not just style)
+            // YLE may hide CC via class changes, style changes, or other attributes
+            const isVisible = getComputedStyle(wrapper).display !== 'none';
+            if (yleWrapperWasVisible && !isVisible) {
+                // CC turned OFF
+                console.info('DualSubExtension: YLE CC turned OFF (wrapper hidden)');
+                yleWrapperWasVisible = false;
+                document.dispatchEvent(new CustomEvent('yleNativeCaptionsToggled', {
+                    bubbles: true,
+                    detail: { enabled: false }
+                }));
+            }
+            else if (!yleWrapperWasVisible && isVisible) {
+                // CC turned ON
+                console.info('DualSubExtension: YLE CC turned ON (wrapper shown)');
+                yleWrapperWasVisible = true;
+                document.dispatchEvent(new CustomEvent('yleNativeCaptionsToggled', {
+                    bubbles: true,
+                    detail: { enabled: true }
+                }));
             }
         }
     });
     yleWrapperStyleObserver.observe(wrapper, {
         attributes: true,
-        attributeFilter: ['style']
+        attributeOldValue: true
+        // No attributeFilter — watch ALL attribute changes to detect CC toggle
     });
 }
 const observer = new MutationObserver((mutations) => {

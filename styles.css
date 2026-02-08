@@ -517,6 +517,12 @@ body.yle-mouse-active nav[class*="Navigation_root"] {
   /* Reset any transforms/zoom */
   transform: none !important;
   zoom: 1 !important;
+  /* Override inherited .dsc-original-hidden properties
+     (copySubtitlesWrapper copies all classes from original wrapper,
+      including dsc-original-hidden which sets visibility:hidden, height:0, overflow:hidden) */
+  visibility: visible !important;
+  height: auto !important;
+  overflow: visible !important;
 }
 
 /* Font sizes are set dynamically via JavaScript based on user settings */
