@@ -281,7 +281,7 @@ const ControlIntegration = {
    * @param {boolean} enabled - Whether CC is ON
    */
   setCaptionsEnabled(enabled) {
-    console.info('DualSubExtension: Captions status changed:', enabled);
+    console.info('DualSubExtension: [DIAG] setCaptionsEnabled called with:', enabled, 'panel:', !!this._panel, 'mounted:', this._panel?.isMounted());
 
     // Update panel UI if mounted (just for display purposes)
     if (this._panel) {

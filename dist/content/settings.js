@@ -174,7 +174,7 @@ function applySubtitleFontSize() {
   `;
 }
 /**
- * Setup speed control for video element
+ * Setup speed control and auto-pause event listeners for video element
  */
 function setupVideoSpeedControl() {
     const video = document.querySelector('video');
@@ -184,6 +184,29 @@ function setupVideoSpeedControl() {
         // Reapply when video metadata loads (new video)
         video.addEventListener('loadedmetadata', applyPlaybackSpeed);
         video.addEventListener('play', applyPlaybackSpeed, { once: true });
+        // Auto-pause event listeners
+        // On seek (skip/repeat), schedule auto-pause for the new subtitle
+        video.addEventListener('seeked', () => {
+            if (autoPauseEnabled && extensionEnabled) {
+                scheduleAutoPause();
+            }
+        });
+        // On play (resume after pause), schedule auto-pause for remaining time
+        video.addEventListener('play', () => {
+            if (autoPauseEnabled && extensionEnabled) {
+                scheduleAutoPause();
+            }
+        });
+        // On pause, clear any pending auto-pause timer
+        video.addEventListener('pause', () => {
+            clearAutoPause();
+        });
+        // On rate change, recalculate delay
+        video.addEventListener('ratechange', () => {
+            if (autoPauseEnabled && extensionEnabled) {
+                scheduleAutoPause();
+            }
+        });
     }
 }
 // Initial setup after a short delay
@@ -266,41 +289,88 @@ function _handleDualSubBehaviourBasedOnSelectedToken(hasSelectedToken) {
         warningPopover.classList.remove("active");
     }
 }
-// Track the last subtitle text to detect changes for auto-pause
-let lastSubtitleText = "";
-// Flag to temporarily disable auto-pause during subtitle skipping
-let isSkippingSubtitle = false;
-// Flag to temporarily disable auto-pause during subtitle repeat
-let isRepeatingSubtitle = false;
+// Auto-pause timeout ID for the setTimeout-based approach
+let _autoPauseTimeout = null;
+// Current subtitle endTime, set by subtitle-dom.ts when a subtitle is displayed.
+// This is the source of truth for auto-pause — avoids time-based lookup issues
+// where DOM mutation fires ~20-30ms before VTT startTime.
+let _currentSubtitleEndTime = null;
 /**
- * Check if auto-pause should trigger for a new subtitle
- * @param {string} newSubtitleText
+ * Set the current subtitle's endTime for auto-pause scheduling.
+ * Called from subtitle-dom.ts when a subtitle is displayed and matched against fullSubtitles.
+ * @param {number | null} endTime - The endTime of the current subtitle, or null to clear
  */
-function checkAndAutoPause(newSubtitleText) {
-    // Only proceed if auto-pause is enabled and we're not currently skipping or repeating
-    if (!autoPauseEnabled || isSkippingSubtitle || isRepeatingSubtitle) {
+function setCurrentSubtitleEndTime(endTime) {
+    _currentSubtitleEndTime = endTime;
+}
+/**
+ * Schedule auto-pause at the end of the current subtitle.
+ * Uses _currentSubtitleEndTime (set by subtitle DOM mutation via text matching)
+ * instead of looking up by video.currentTime, which is unreliable because
+ * DOM mutation fires ~20-30ms before VTT startTime.
+ *
+ * Called from: subtitle DOM mutation, video seeked/play/ratechange events.
+ */
+function scheduleAutoPause() {
+    // Clear any existing timer first
+    clearAutoPause();
+    if (!autoPauseEnabled || !extensionEnabled) {
         return;
     }
-    // Only pause if the subtitle text actually changed (not just styling)
-    const normalizedNew = newSubtitleText.trim().toLowerCase();
-    const normalizedLast = lastSubtitleText.trim().toLowerCase();
-    if (normalizedNew && normalizedNew !== normalizedLast && normalizedNew.length > 1) {
-        console.log("YleDualSubExtension: Auto-pause triggered, new subtitle:", normalizedNew.substring(0, 30));
-        const videoElement = document.querySelector('video');
-        if (videoElement && !videoElement.paused) {
-            // Small delay to let the subtitle fully render before pausing
-            setTimeout(() => {
-                if (autoPauseEnabled) {
-                    const video = document.querySelector('video');
-                    if (video && !video.paused) {
-                        video.pause();
-                        console.log("YleDualSubExtension: Video paused by auto-pause");
-                    }
-                }
-            }, 300);
+    const video = document.querySelector('video');
+    if (!video || video.paused) {
+        return;
+    }
+    // For DOM mutation calls, _currentSubtitleEndTime is already set.
+    // For seeked/play/ratechange events, we need to look up by currentTime.
+    let endTime = _currentSubtitleEndTime;
+    if (endTime === null) {
+        // Fallback: look up by currentTime (for seeked/play/ratechange events)
+        const subtitles = window.fullSubtitles;
+        if (!subtitles || subtitles.length === 0) {
+            return;
+        }
+        const currentTime = video.currentTime;
+        for (let i = 0; i < subtitles.length; i++) {
+            const sub = subtitles[i];
+            if (currentTime >= sub.startTime && currentTime < sub.endTime) {
+                endTime = sub.endTime;
+                break;
+            }
+        }
+        if (endTime === null) {
+            return;
         }
     }
-    lastSubtitleText = newSubtitleText;
+    const currentTime = video.currentTime;
+    // Calculate delay: time until 0.05s before endTime, adjusted for playback rate
+    const pauseAt = endTime - 0.05;
+    const remaining = pauseAt - currentTime;
+    if (remaining <= 0) {
+        return;
+    }
+    const delay = (remaining / video.playbackRate) * 1000;
+    console.log(`[AutoPause] SCHEDULED: endTime=${endTime.toFixed(3)}, currentTime=${currentTime.toFixed(3)}, delay=${delay.toFixed(0)}ms`);
+    _autoPauseTimeout = setTimeout(() => {
+        _autoPauseTimeout = null;
+        if (!autoPauseEnabled)
+            return;
+        const v = document.querySelector('video');
+        if (v && !v.paused) {
+            v.pause();
+            console.log(`[AutoPause] PAUSED at ${v.currentTime.toFixed(3)}`);
+        }
+    }, delay);
+}
+/**
+ * Clear any pending auto-pause timeout.
+ * Called from: video pause event, auto-pause toggle OFF, start of scheduleAutoPause.
+ */
+function clearAutoPause() {
+    if (_autoPauseTimeout !== null) {
+        clearTimeout(_autoPauseTimeout);
+        _autoPauseTimeout = null;
+    }
 }
 /**
  * Load auto-pause preference from Chrome storage

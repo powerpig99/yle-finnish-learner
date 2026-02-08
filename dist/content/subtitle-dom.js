@@ -137,6 +137,28 @@ function addContentToDisplayedSubtitlesWrapper(displayedSubtitlesWrapper, origin
     if (!finnishText || finnishText.length === 0) {
         return;
     }
+    // Set current subtitle endTime for auto-pause.
+    // DOM mutation fires ~20-30ms before VTT startTime, so we use a tolerance
+    // for the time-based lookup HERE (the one place where tolerance is needed).
+    // scheduleAutoPause() then uses this stored endTime directly.
+    const subtitles = window.fullSubtitles;
+    const videoEl = document.querySelector('video');
+    if (subtitles && subtitles.length > 0 && videoEl) {
+        const ct = videoEl.currentTime;
+        let matchedEndTime = null;
+        for (let i = 0; i < subtitles.length; i++) {
+            const sub = subtitles[i];
+            // Tolerance on startTime only: DOM mutation fires slightly before VTT startTime
+            if (ct >= sub.startTime - 0.15 && ct < sub.endTime) {
+                matchedEndTime = sub.endTime;
+                break;
+            }
+        }
+        setCurrentSubtitleEndTime(matchedEndTime);
+    }
+    else {
+        setCurrentSubtitleEndTime(null);
+    }
     // Create Finnish span with clickable words for popup dictionary
     // ALWAYS shown so users can click words to look up translations
     const finnishSpan = createSubtitleSpanWithClickableWords(finnishText, spanClassName);
@@ -187,8 +209,8 @@ function addContentToDisplayedSubtitlesWrapper(displayedSubtitlesWrapper, origin
         targetLanguageSpan.id = spanId;
         displayedSubtitlesWrapper.appendChild(targetLanguageSpan);
     }
-    // Check for auto-pause
-    checkAndAutoPause(finnishText);
+    // Schedule auto-pause at end of current subtitle
+    scheduleAutoPause();
 }
 /**
  * Handle mutation related to subtitles wrapper
@@ -203,6 +225,10 @@ let lastDisplayedSubtitleText = "";
 // Track whether YLE subtitles were previously disabled (to detect re-enable)
 let yleSubtitlesWereDisabled = false;
 function handleSubtitlesWrapperMutation(mutation) {
+    // When extension is off, don't touch the original subtitles at all
+    if (!shouldProcessSubtitles()) {
+        return;
+    }
     const originalSubtitlesWrapper = mutation.target;
     originalSubtitlesWrapper.style.display = "none";
     const displayedSubtitlesWrapper = createAndPositionDisplayedSubtitlesWrapper(originalSubtitlesWrapper);
@@ -259,6 +285,7 @@ function handleSubtitlesWrapperMutation(mutation) {
         if (finnishTextSpans.length === 0) {
             displayedSubtitlesWrapper.innerHTML = "";
             lastDisplayedSubtitleText = "";
+            setCurrentSubtitleEndTime(null);
             // Check if this is a subtitle disable (removed nodes but no new ones)
             if (mutation.removedNodes.length > 0) {
                 console.info('DualSubExtension: YLE subtitles appear to be disabled (wrapper emptied)');

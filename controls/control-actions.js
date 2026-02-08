@@ -6,17 +6,6 @@
 
 const ControlActions = {
   /**
-   * Skip state for preventing auto-pause during navigation
-   */
-  _isSkipping: false,
-
-  /**
-   * Repeat state for tracking repeat mode
-   */
-  _repeatStopTime: null,
-  _repeatCheckInterval: null,
-
-  /**
    * Get the current video element
    * @returns {HTMLVideoElement|null}
    */
@@ -49,25 +38,27 @@ const ControlActions = {
     const video = this.getVideoElement();
     if (!video) return;
 
-    this._isSkipping = true;
     const currentTime = video.currentTime;
 
-    // Find the previous subtitle timestamp before current time
-    // We look for subtitles at least 1 second before current position
-    const previousSubtitles = subtitleTimestamps.filter(entry => entry.time < currentTime - 1);
-
-    if (previousSubtitles.length > 0) {
-      const previousSubtitle = previousSubtitles[previousSubtitles.length - 1];
-      video.currentTime = previousSubtitle.time;
-    } else {
-      // No previous subtitle found, skip back 5 seconds as fallback
-      video.currentTime = Math.max(0, currentTime - 5);
+    // Find the current subtitle index (last one that started at or before currentTime)
+    let currentSubIndex = -1;
+    for (let i = subtitleTimestamps.length - 1; i >= 0; i--) {
+      if (subtitleTimestamps[i].time <= currentTime) {
+        currentSubIndex = i;
+        break;
+      }
     }
 
-    // Re-enable auto-pause after a short delay to let the new subtitle appear
-    setTimeout(() => {
-      this._isSkipping = false;
-    }, 800);
+    // Always go to the PREVIOUS subtitle (one before current)
+    if (currentSubIndex > 0) {
+      video.currentTime = subtitleTimestamps[currentSubIndex - 1].time;
+    } else if (currentSubIndex === 0) {
+      // Already at first subtitle — seek to its start
+      video.currentTime = subtitleTimestamps[0].time;
+    } else {
+      // No subtitle found, skip back 5 seconds as fallback
+      video.currentTime = Math.max(0, currentTime - 5);
+    }
   },
 
   /**
@@ -78,7 +69,6 @@ const ControlActions = {
     const video = this.getVideoElement();
     if (!video) return;
 
-    this._isSkipping = true;
     const currentTime = video.currentTime;
 
     // Find the next subtitle timestamp after current time
@@ -90,33 +80,26 @@ const ControlActions = {
       // No next subtitle found, skip forward 5 seconds as fallback
       video.currentTime = currentTime + 5;
     }
-
-    // Re-enable auto-pause after a short delay to let the new subtitle appear
-    setTimeout(() => {
-      this._isSkipping = false;
-    }, 800);
   },
 
   /**
-   * Repeat the current subtitle from start to current position
+   * Repeat the current subtitle - seeks to its start time
+   * Auto-pause at end is handled by the video's seeked event listener
    * @param {Array<{startTime: number, endTime: number, text: string}>} subtitles - Array of subtitles with timing
-   * @param {Function} onRepeatComplete - Callback when repeat finishes
    */
-  repeatCurrentSubtitle(subtitles, onRepeatComplete) {
+  repeatCurrentSubtitle(subtitles) {
     const video = this.getVideoElement();
     if (!video) {
-      console.warn('DualSubExtension: Repeat - no video element found');
-      if (onRepeatComplete) onRepeatComplete(); // Clear repeat flag
+      console.warn('[Repeat] no video element');
       return;
     }
-    if (subtitles.length === 0) {
-      console.warn('DualSubExtension: Repeat - no subtitles available, count:', subtitles.length);
-      if (onRepeatComplete) onRepeatComplete(); // Clear repeat flag
+    if (!subtitles || subtitles.length === 0) {
+      console.warn('[Repeat] subtitles empty');
       return;
     }
 
     const currentTime = video.currentTime;
-    console.info('DualSubExtension: Repeat triggered at time:', currentTime.toFixed(2), 'with', subtitles.length, 'subtitles');
+    console.log(`[Repeat] currentTime=${currentTime.toFixed(3)}, subtitles.length=${subtitles.length}, video.paused=${video.paused}`);
 
     // Find current subtitle (the one we're in or the most recent one)
     let currentSubIndex = -1;
@@ -131,96 +114,19 @@ const ControlActions = {
     }
 
     if (currentSubIndex === -1) {
-      // No subtitle found, go to first one
-      console.info('DualSubExtension: No current subtitle found, going to first');
-      if (subtitles.length > 0) {
-        video.currentTime = subtitles[0].startTime;
-        video.play();
-      }
-      if (onRepeatComplete) onRepeatComplete(); // Clear repeat flag
+      console.log(`[Repeat] no match found, seeking to first subtitle at ${subtitles[0].startTime.toFixed(3)}`);
+      video.currentTime = subtitles[0].startTime;
       return;
     }
 
     const currentSub = subtitles[currentSubIndex];
-    const threshold = 0.5; // If within 0.5 seconds of start, go to previous
+    console.log(`[Repeat] matched sub[${currentSubIndex}]: [${currentSub.startTime.toFixed(3)}-${currentSub.endTime.toFixed(3)}], seeking from ${currentTime.toFixed(3)} to ${currentSub.startTime.toFixed(3)}`);
+    video.currentTime = currentSub.startTime;
 
-    let targetStartTime;
-    if (currentTime - currentSub.startTime < threshold && currentSubIndex > 0) {
-      // Already at beginning, go to previous subtitle
-      targetStartTime = subtitles[currentSubIndex - 1].startTime;
-      console.info('DualSubExtension: At beginning of subtitle, going to previous');
-    } else {
-      // Go to beginning of current subtitle
-      targetStartTime = currentSub.startTime;
-    }
-
-    // Clear any existing repeat monitor
-    if (this._repeatCheckInterval) {
-      clearInterval(this._repeatCheckInterval);
-      this._repeatCheckInterval = null;
-    }
-
-    // Store where to stop (current position before jumping back)
-    this._repeatStopTime = currentTime;
-    this._repeatStartedPlaying = false;
-
-    // Jump to start
-    video.currentTime = targetStartTime;
-
-    console.info('DualSubExtension: Repeating from', targetStartTime.toFixed(2), 'to', this._repeatStopTime.toFixed(2));
-
-    // Start playing and wait for it to actually start
-    const playPromise = video.play();
-    if (playPromise !== undefined) {
-      playPromise.then(() => {
-        this._repeatStartedPlaying = true;
-        this._startRepeatMonitor(video, onRepeatComplete);
-      }).catch(err => {
-        console.warn('DualSubExtension: Play failed during repeat:', err);
-        // Still try to monitor in case play works later
-        this._repeatStartedPlaying = true;
-        this._startRepeatMonitor(video, onRepeatComplete);
-      });
-    } else {
-      // Older browsers don't return a promise
-      this._repeatStartedPlaying = true;
-      this._startRepeatMonitor(video, onRepeatComplete);
-    }
-  },
-
-  /**
-   * Start the repeat monitor interval
-   * @private
-   */
-  _startRepeatMonitor(video, onRepeatComplete) {
-    // Small delay to ensure play has started
-    setTimeout(() => {
-      this._repeatCheckInterval = setInterval(() => {
-        // Check if we've reached the stop time
-        if (video.currentTime >= this._repeatStopTime - 0.1) {
-          video.pause();
-          clearInterval(this._repeatCheckInterval);
-          this._repeatCheckInterval = null;
-          const stoppedAt = video.currentTime;
-          this._repeatStopTime = null;
-          this._repeatStartedPlaying = false;
-          console.info('DualSubExtension: Repeat finished, paused at', stoppedAt.toFixed(2));
-          if (onRepeatComplete) onRepeatComplete();
-          return;
-        }
-
-        // Clear if user manually seeked far away (but NOT if just paused - they might resume)
-        if (this._repeatStopTime !== null && Math.abs(video.currentTime - this._repeatStopTime) > 30) {
-          console.info('DualSubExtension: Repeat cancelled - user seeked away');
-          clearInterval(this._repeatCheckInterval);
-          this._repeatCheckInterval = null;
-          this._repeatStopTime = null;
-          this._repeatStartedPlaying = false;
-          // Still call callback to clear the repeat flag
-          if (onRepeatComplete) onRepeatComplete();
-        }
-      }, 100);
-    }, 200); // 200ms delay to let play() actually start
+    // Verify seek completed
+    video.addEventListener('seeked', () => {
+      console.log(`[Repeat] seeked done, now at ${video.currentTime.toFixed(3)}`);
+    }, { once: true });
   },
 
   /**
@@ -260,14 +166,6 @@ const ControlActions = {
 
     console.info('DualSubExtension: Playback speed adjusted to', newSpeed + 'x');
     return newSpeed;
-  },
-
-  /**
-   * Check if currently skipping (for auto-pause prevention)
-   * @returns {boolean}
-   */
-  isSkipping() {
-    return this._isSkipping;
   },
 
   /**

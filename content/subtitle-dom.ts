@@ -158,6 +158,28 @@ function addContentToDisplayedSubtitlesWrapper(
     return;
   }
 
+  // Set current subtitle endTime for auto-pause.
+  // DOM mutation fires ~20-30ms before VTT startTime, so we use a tolerance
+  // for the time-based lookup HERE (the one place where tolerance is needed).
+  // scheduleAutoPause() then uses this stored endTime directly.
+  const subtitles = window.fullSubtitles;
+  const videoEl = document.querySelector('video') as HTMLVideoElement | null;
+  if (subtitles && subtitles.length > 0 && videoEl) {
+    const ct = videoEl.currentTime;
+    let matchedEndTime: number | null = null;
+    for (let i = 0; i < subtitles.length; i++) {
+      const sub = subtitles[i];
+      // Tolerance on startTime only: DOM mutation fires slightly before VTT startTime
+      if (ct >= sub.startTime - 0.15 && ct < sub.endTime) {
+        matchedEndTime = sub.endTime;
+        break;
+      }
+    }
+    setCurrentSubtitleEndTime(matchedEndTime);
+  } else {
+    setCurrentSubtitleEndTime(null);
+  }
+
   // Create Finnish span with clickable words for popup dictionary
   // ALWAYS shown so users can click words to look up translations
   const finnishSpan = createSubtitleSpanWithClickableWords(finnishText, spanClassName);
@@ -217,8 +239,8 @@ function addContentToDisplayedSubtitlesWrapper(
     displayedSubtitlesWrapper.appendChild(targetLanguageSpan);
   }
 
-  // Check for auto-pause
-  checkAndAutoPause(finnishText);
+  // Schedule auto-pause at end of current subtitle
+  scheduleAutoPause();
 }
 
 /**
@@ -235,6 +257,11 @@ let lastDisplayedSubtitleText = "";
 let yleSubtitlesWereDisabled = false;
 
 function handleSubtitlesWrapperMutation(mutation: MutationRecord) {
+  // When extension is off, don't touch the original subtitles at all
+  if (!shouldProcessSubtitles()) {
+    return;
+  }
+
   const originalSubtitlesWrapper = mutation.target as HTMLElement;
   originalSubtitlesWrapper.style.display = "none";
 
@@ -304,6 +331,7 @@ function handleSubtitlesWrapperMutation(mutation: MutationRecord) {
     if (finnishTextSpans.length === 0) {
       displayedSubtitlesWrapper.innerHTML = "";
       lastDisplayedSubtitleText = "";
+      setCurrentSubtitleEndTime(null);
 
       // Check if this is a subtitle disable (removed nodes but no new ones)
       if (mutation.removedNodes.length > 0) {

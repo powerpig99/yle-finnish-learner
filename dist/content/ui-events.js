@@ -248,7 +248,12 @@ document.addEventListener('dscDualSubToggle', (e) => {
 document.addEventListener('dscAutoPauseToggle', (e) => {
     const { enabled } = e.detail;
     autoPauseEnabled = enabled;
-    lastSubtitleText = ''; // Reset to allow next subtitle to trigger pause
+    if (enabled) {
+        scheduleAutoPause();
+    }
+    else {
+        clearAutoPause();
+    }
 });
 document.addEventListener('dscSpeedChange', (e) => {
     const { speed } = e.detail;
@@ -260,16 +265,6 @@ document.addEventListener('dscSourceLangChange', (e) => {
     sharedTranslationMap.clear();
     sharedTranslationErrorMap.clear();
 });
-// Handle repeat subtitle start - disable auto-pause during repeat
-document.addEventListener('dscRepeatSubtitle', () => {
-    console.info('DualSubExtension: Repeat started, disabling auto-pause temporarily');
-    isRepeatingSubtitle = true;
-});
-// Handle repeat subtitle complete - re-enable auto-pause
-document.addEventListener('dscRepeatComplete', () => {
-    console.info('DualSubExtension: Repeat completed, re-enabling auto-pause');
-    isRepeatingSubtitle = false;
-});
 // Handle extension toggle from control panel
 // Simplified: no auto-sync, user controls everything
 document.addEventListener('dscExtensionToggle', (e) => {
@@ -278,6 +273,8 @@ document.addEventListener('dscExtensionToggle', (e) => {
     console.info('DualSubExtension: Extension toggled:', enabled);
     // When extension is disabled, restore native YLE behavior
     if (!enabled) {
+        // Clear any pending auto-pause timer
+        clearAutoPause();
         // Hide extension's subtitle overlay
         const extensionOverlay = document.getElementById('dual-sub-overlay');
         if (extensionOverlay) {
@@ -309,6 +306,10 @@ document.addEventListener('dscExtensionToggle', (e) => {
         const originalWrapper = getOriginalSubtitlesWrapper();
         if (originalWrapper) {
             originalWrapper.style.visibility = 'hidden';
+        }
+        // Re-schedule auto-pause if it's enabled
+        if (autoPauseEnabled) {
+            scheduleAutoPause();
         }
     }
 });
