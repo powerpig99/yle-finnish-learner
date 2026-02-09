@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "YLE Finnish Learner",
-  "version": "5.2.0",
+  "version": "5.2.1",
   "description": "Learn Finnish with dual subtitles, popup dictionary, and playback controls on YLE Areena.",
   "icons": {
     "16": "icons/icon.png",
