@@ -25,7 +25,7 @@ A Chrome extension for learning Finnish through YLE Areena (Finnish public broad
   - DeepL (high quality, free API key available)
   - Claude, Gemini, Grok, Kimi (AI-powered with context)
 - **Smart Caching**: Translations cached locally for instant replay
-- **Clean Viewing Mode**: Controls hide during playback, appear on mouse movement
+- **Clean Viewing Mode**: Controls and background shade hide during playback, subtitles drop to bottom for unobstructed viewing
 - **Fullscreen Support**: All features work in fullscreen mode
 
 ## Keyboard Shortcuts
