@@ -185,9 +185,9 @@ document.addEventListener("change", (e) => {
             const displayedSubtitlesWrapper = createAndPositionDisplayedSubtitlesWrapper(originalSubtitlesWrapper);
             displayedSubtitlesWrapper.innerHTML = "";
             displayedSubtitlesWrapper.style.display = "flex";
-            const originalSubtitlesWrapperSpans = originalSubtitlesWrapper.querySelectorAll('span');
-            if (originalSubtitlesWrapperSpans) {
-                addContentToDisplayedSubtitlesWrapper(displayedSubtitlesWrapper, originalSubtitlesWrapperSpans);
+            const originalSubtitleElements = getSubtitleTextElements(originalSubtitlesWrapper);
+            if (originalSubtitleElements.length > 0) {
+                addContentToDisplayedSubtitlesWrapper(displayedSubtitlesWrapper, originalSubtitleElements);
             }
             translationQueue.processQueue().then(() => { }).catch((error) => {
                 console.error("DualSubExtension: Error processing translation queue after enabling dual subtitles:", error);
@@ -221,9 +221,9 @@ document.addEventListener('dscDualSubToggle', (e) => {
             const displayedSubtitlesWrapper = createAndPositionDisplayedSubtitlesWrapper(originalSubtitlesWrapper);
             displayedSubtitlesWrapper.innerHTML = '';
             displayedSubtitlesWrapper.style.display = 'flex';
-            const originalSubtitlesWrapperSpans = originalSubtitlesWrapper.querySelectorAll('span');
-            if (originalSubtitlesWrapperSpans) {
-                addContentToDisplayedSubtitlesWrapper(displayedSubtitlesWrapper, originalSubtitlesWrapperSpans);
+            const originalSubtitleElements = getSubtitleTextElements(originalSubtitlesWrapper);
+            if (originalSubtitleElements.length > 0) {
+                addContentToDisplayedSubtitlesWrapper(displayedSubtitlesWrapper, originalSubtitleElements);
             }
             translationQueue.processQueue().catch(console.error);
         }

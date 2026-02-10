@@ -11,6 +11,21 @@ const SUBTITLE_WRAPPER_SELECTORS = [
     '[class*="Subtitle"]'
 ];
 let cachedNativeSubtitlesWrapper = null;
+/**
+ * Find subtitle text elements inside a container.
+ * Uses a generic approach: find leaf elements with text content.
+ * Immune to YLE DOM structure changes (span, div, p, etc. all work).
+ */
+function getSubtitleTextElements(container) {
+    const leaves = [];
+    container.querySelectorAll('*').forEach(el => {
+        const htmlEl = el;
+        if (htmlEl.children.length === 0 && htmlEl.textContent?.trim()) {
+            leaves.push(htmlEl);
+        }
+    });
+    return leaves;
+}
 function isLikelySubtitleWrapper(element) {
     if (!element)
         return false;
@@ -29,8 +44,7 @@ function isLikelySubtitleWrapper(element) {
         return true;
     if (role === 'status')
         return true;
-    const spans = element.querySelectorAll('span');
-    return spans.length > 0;
+    return getSubtitleTextElements(element).length > 0;
 }
 function findNativeSubtitlesWrapper() {
     const playerUI = document.querySelector('[class*="PlayerUI__UI"]');
@@ -96,7 +110,15 @@ function isMutationRelatedToSubtitlesWrapper(mutation) {
         if (wrapper && target === wrapper) {
             return true;
         }
-        return target?.dataset?.["testid"] === "subtitles-wrapper";
+        if (target?.dataset?.["testid"] === "subtitles-wrapper") {
+            return true;
+        }
+        // Also detect mutations on children of the wrapper (e.g. LiveRegion child)
+        // YLE may mutate subtitle-row divs inside a child container
+        if (wrapper && target && wrapper.contains(target)) {
+            return true;
+        }
+        return false;
     }
     catch (error) {
         console.warn("YleDualSubExtension: Catch error checking mutation related to subtitles wrapper:", error);
@@ -122,15 +144,15 @@ function createAndPositionDisplayedSubtitlesWrapper(originalSubtitlesWrapper) {
  * Add both Finnish and target language subtitles to the displayed subtitles wrapper
  *
  * @param {HTMLElement} displayedSubtitlesWrapper
- * @param {NodeListOf<HTMLSpanElement>} originalSubtitlesWrapperSpans
- * original Finnish Subtitles Wrapper Spans
+ * @param {NodeListOf<HTMLElement>} originalSubtitleElements
+ * original Finnish subtitle text elements (spans or divs)
  */
-function addContentToDisplayedSubtitlesWrapper(displayedSubtitlesWrapper, originalSubtitlesWrapperSpans) {
-    if (!originalSubtitlesWrapperSpans || originalSubtitlesWrapperSpans.length === 0) {
+function addContentToDisplayedSubtitlesWrapper(displayedSubtitlesWrapper, originalSubtitleElements) {
+    if (!originalSubtitleElements || originalSubtitleElements.length === 0) {
         return;
     }
-    const spanClassName = originalSubtitlesWrapperSpans[0].className;
-    const finnishText = Array.from(originalSubtitlesWrapperSpans).map((span) => (span.textContent || '')).join(" ")
+    const spanClassName = originalSubtitleElements[0].className;
+    const finnishText = Array.from(originalSubtitleElements).map((el) => (el.textContent || '')).join(" ")
         .replace(/\n/g, " ")
         .replace(/\s+/g, " ")
         .trim();
@@ -227,14 +249,21 @@ function handleSubtitlesWrapperMutation(mutation) {
     if (!shouldProcessSubtitles()) {
         return;
     }
-    const originalSubtitlesWrapper = mutation.target;
+    // Always use the actual subtitles-wrapper, not mutation.target
+    // (mutation may fire on a child like the LiveRegion)
+    const originalSubtitlesWrapper = getNativeSubtitlesWrapper() || mutation.target;
     originalSubtitlesWrapper.classList.add('dsc-original-hidden');
     const displayedSubtitlesWrapper = createAndPositionDisplayedSubtitlesWrapper(originalSubtitlesWrapper);
+    // Sync font-size from original wrapper (YLE sets it dynamically via inline style
+    // based on player size). Copy on every mutation to track player resizes.
+    if (originalSubtitlesWrapper.style.fontSize) {
+        displayedSubtitlesWrapper.style.fontSize = originalSubtitlesWrapper.style.fontSize;
+    }
     if (mutation.addedNodes.length > 0) {
-        const finnishTextSpans = mutation.target.querySelectorAll("span");
+        const finnishTextElements = getSubtitleTextElements(originalSubtitlesWrapper);
         // Get the current Finnish text
-        const currentFinnishText = Array.from(finnishTextSpans)
-            .map((span) => (span.textContent || ''))
+        const currentFinnishText = Array.from(finnishTextElements)
+            .map((el) => (el.textContent || ''))
             .join(" ")
             .replace(/\n/g, " ")
             .replace(/\s+/g, " ")
@@ -245,11 +274,11 @@ function handleSubtitlesWrapperMutation(mutation) {
         }
         lastDisplayedSubtitleText = currentFinnishText;
         displayedSubtitlesWrapper.innerHTML = "";
-        addContentToDisplayedSubtitlesWrapper(displayedSubtitlesWrapper, finnishTextSpans);
+        addContentToDisplayedSubtitlesWrapper(displayedSubtitlesWrapper, finnishTextElements);
         // Record subtitle timestamp for skip feature
         const videoElement = document.querySelector('video');
-        if (videoElement && finnishTextSpans.length > 0) {
-            const subtitleText = Array.from(finnishTextSpans).map(span => span.textContent || '').join(' ').trim();
+        if (videoElement && finnishTextElements.length > 0) {
+            const subtitleText = Array.from(finnishTextElements).map(el => el.textContent || '').join(' ').trim();
             if (subtitleText) {
                 const currentTime = videoElement.currentTime;
                 // Only add if this is a new timestamp (not already recorded within 0.5s)
@@ -268,8 +297,8 @@ function handleSubtitlesWrapperMutation(mutation) {
     else {
         // No added nodes - subtitles might have been cleared
         // Check if the original wrapper is now empty
-        const finnishTextSpans = mutation.target.querySelectorAll("span");
-        if (finnishTextSpans.length === 0) {
+        const finnishTextElements = getSubtitleTextElements(originalSubtitlesWrapper);
+        if (finnishTextElements.length === 0) {
             displayedSubtitlesWrapper.innerHTML = "";
             lastDisplayedSubtitleText = "";
             setCurrentSubtitleEndTime(null);

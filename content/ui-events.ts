@@ -216,11 +216,11 @@ document.addEventListener("change", (e) => {
       displayedSubtitlesWrapper.innerHTML = "";
       displayedSubtitlesWrapper.style.display = "flex";
 
-      const originalSubtitlesWrapperSpans = originalSubtitlesWrapper.querySelectorAll('span');
-      if (originalSubtitlesWrapperSpans) {
+      const originalSubtitleElements = getSubtitleTextElements(originalSubtitlesWrapper);
+      if (originalSubtitleElements.length > 0) {
         addContentToDisplayedSubtitlesWrapper(
           displayedSubtitlesWrapper,
-          originalSubtitlesWrapperSpans as NodeListOf<HTMLSpanElement>,
+          originalSubtitleElements,
         );
       }
       translationQueue.processQueue().then(() => { }).catch((error) => {
@@ -260,11 +260,11 @@ document.addEventListener('dscDualSubToggle', (e) => {
       displayedSubtitlesWrapper.innerHTML = '';
       displayedSubtitlesWrapper.style.display = 'flex';
 
-      const originalSubtitlesWrapperSpans = originalSubtitlesWrapper.querySelectorAll('span');
-      if (originalSubtitlesWrapperSpans) {
+      const originalSubtitleElements = getSubtitleTextElements(originalSubtitlesWrapper);
+      if (originalSubtitleElements.length > 0) {
         addContentToDisplayedSubtitlesWrapper(
           displayedSubtitlesWrapper,
-          originalSubtitlesWrapperSpans as NodeListOf<HTMLSpanElement>
+          originalSubtitleElements,
         );
       }
       translationQueue.processQueue().catch(console.error);
