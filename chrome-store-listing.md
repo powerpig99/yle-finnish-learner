@@ -47,6 +47,11 @@ How to use:
 Privacy:
 No analytics or tracking. Translation text and word lookups are sent directly from your browser to the provider you choose. API keys are stored locally in Chrome sync storage. No data is sent to developer servers.
 
+What's new in v5.3.0:
+• Fixed: Dual subtitles not displaying due to YLE Areena player update
+• Improved: Subtitle rendering is now resilient to future YLE DOM changes
+• Improved: Subtitle font size now syncs with YLE's dynamic player sizing
+
 Note:
 Supports YLE Areena only.
 
