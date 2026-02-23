@@ -77,10 +77,7 @@ export default [
             'coverage/**',
             'website/**',
             'landing-page/**',
-            'extension-options-page/dist/**',
-            'extension-options-page/.vite/**',
             '*.min.js',
-            '**/.docusaurus/**',
             '**/dist/**',
             '**/build/**',
             // Legacy injected scripts (inject.js runs in page context, not extension context)

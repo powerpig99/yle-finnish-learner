@@ -67,7 +67,7 @@ yle-language-reactor/
 ├── Other
 │   ├── manifest.json         # Chrome Extension Manifest v3
 │   ├── styles.css            # Unified styles with `dsc-*` prefix
-│   ├── extension-options-page/ # React-based settings UI
+│   ├── extension-options-page/ # Settings UI (vanilla HTML/CSS/JS)
 │   ├── lib/lamejs.min.js     # MP3 encoding library
 │   └── icons/icon.png        # Extension icon
 ```

@@ -1,7 +1,62 @@
 <!DOCTYPE html>
 <html lang="en">
-  <body>
-    <div id="root"></div>
-    <script type="module" src="/src/main.jsx"></script>
-  </body>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>LLS Settings</title>
+  <link rel="stylesheet" href="options.css">
+</head>
+<body>
+  <div class="settings-page">
+    <header class="settings-header">
+      <h1>LLS Settings</h1>
+    </header>
+    <main class="settings-content">
+      <section class="settings-section">
+        <h2>Translation Provider</h2>
+        <div id="provider-list" class="provider-list"></div>
+        <div id="api-key-section" class="api-key-section hidden">
+          <input type="password" id="api-key-input" class="api-key-input" placeholder="">
+          <a id="api-key-link" class="api-key-link" href="#" target="_blank" rel="noopener noreferrer">Get API key &rarr;</a>
+        </div>
+      </section>
+
+      <hr class="divider">
+
+      <section class="settings-section">
+        <h2>Target Language</h2>
+        <select id="language-select" class="language-dropdown"></select>
+      </section>
+
+      <hr class="divider">
+
+      <section class="settings-section">
+        <h2>Subtitle Size</h2>
+        <div class="slider-container">
+          <span class="slider-label">S</span>
+          <input type="range" id="size-slider" class="size-slider" min="0" max="5" value="1">
+          <span class="slider-label">4K</span>
+        </div>
+        <div id="slider-value" class="slider-value">Medium (32px/28px)</div>
+      </section>
+
+      <hr class="divider">
+
+      <section class="settings-section">
+        <h2>Cache Management</h2>
+        <div class="cache-buttons">
+          <div class="cache-item">
+            <button id="clear-word-cache" class="clear-cache-btn">Clear Word Cache</button>
+            <span id="word-cache-count" class="cache-count">0 entries</span>
+          </div>
+          <div class="cache-item">
+            <button id="clear-subtitle-cache" class="clear-cache-btn">Clear Subtitle Cache</button>
+            <span id="subtitle-cache-count" class="cache-count">0 entries</span>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+  <script src="options.js" defer></script>
+</body>
 </html>

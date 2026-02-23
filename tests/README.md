@@ -7,12 +7,12 @@ This directory contains tests for the YLE Dual Sub extension.
 ### 1. Install Dependencies
 
 ```bash
-npm install --save-dev jest fake-indexeddb @babel/preset-env
+npm install
 ```
 
 ### 2. Configure Jest
 
-Add this to your `package.json`:
+Jest is already configured in the root `package.json`:
 
 ```json
 {
@@ -22,34 +22,15 @@ Add this to your `package.json`:
     "test:coverage": "jest --coverage"
   },
   "jest": {
-    "testEnvironment": "jsdom",
+    "testEnvironment": "node",
     "setupFilesAfterEnv": ["<rootDir>/tests/setup.js"],
-    "transform": {
-      "^.+\\.js$": "babel-jest"
-    },
-    "moduleFileExtensions": ["js"],
+    "transform": {},
     "testMatch": ["**/tests/**/*.test.js"]
   }
 }
 ```
 
-### 3. Configure Babel
-
-Create `.babelrc` in the project root:
-
-```json
-{
-  "presets": [
-    ["@babel/preset-env", {
-      "targets": {
-        "node": "current"
-      }
-    }]
-  ]
-}
-```
-
-### 4. Update database.js
+### 3. Update database.js
 
 Make sure your database functions are exported at the end of `database.js`:
 
@@ -149,9 +130,6 @@ This will create a `coverage/` directory with an HTML report you can open in you
 
 ### Issue: "Cannot find module 'fake-indexeddb'"
 **Solution:** Run `npm install --save-dev fake-indexeddb`
-
-### Issue: "Unexpected token 'export'"
-**Solution:** Make sure Babel is configured correctly (see step 3 above)
 
 ### Issue: Tests timeout
 **Solution:** Increase Jest timeout in your test file:

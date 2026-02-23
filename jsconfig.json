@@ -44,9 +44,7 @@
     "website",
     "landing-page",
     "extension-options-page",
-    "**/.docusaurus",
     "**/dist",
-    "**/build",
-    "**/.vite"
+    "**/build"
   ]
 }

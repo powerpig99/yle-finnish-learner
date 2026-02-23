@@ -112,7 +112,7 @@ Click the extension icon → Settings to:
 │   ├── control-actions.js  # Action handlers
 │   ├── control-keyboard.js # Keyboard shortcuts
 │   └── audio-*.js          # Audio recording/download
-└── extension-options-page/ # React settings page
+└── extension-options-page/ # Settings page (vanilla HTML/CSS/JS)
 ```
 
 ### Building
@@ -121,10 +121,7 @@ Click the extension icon → Settings to:
 # Build core extension scripts (TypeScript)
 npm run build:extension
 
-# Build the options page
-cd extension-options-page
-npm install
-npm run build
+# Options page requires no build step (vanilla HTML/CSS/JS)
 ```
 
 ### Testing

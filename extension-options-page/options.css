@@ -1,7 +1,19 @@
-/* Settings Page - Minimalistic Design */
+html,
+body {
+  margin: 0;
+  padding: 0;
+  overflow-x: hidden;
+  width: 100%;
+}
 
 * {
   box-sizing: border-box;
+}
+
+body {
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  background: #0f0f0f;
+  color: #e5e5e5;
 }
 
 .settings-page {
@@ -11,7 +23,6 @@
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
 }
 
-/* Header */
 .settings-header {
   background: #1a1a1a;
   padding: 24px 32px;
@@ -24,7 +35,6 @@
   font-weight: 600;
 }
 
-/* Content */
 .settings-content {
   max-width: 600px;
   margin: 0 auto;
@@ -39,7 +49,7 @@
   font-size: 16px;
   font-weight: 500;
   color: #9ca3af;
-  margin: 0 0 16px 0;
+  margin: 0 0 16px;
 }
 
 .divider {
@@ -48,7 +58,6 @@
   margin: 24px 0;
 }
 
-/* Provider Radio Buttons */
 .provider-list {
   display: flex;
   flex-direction: column;
@@ -88,7 +97,6 @@
   margin-left: auto;
 }
 
-/* API Key Input */
 .api-key-section {
   margin-top: 16px;
   display: flex;
@@ -121,7 +129,6 @@
   text-decoration: underline;
 }
 
-/* Language Dropdown */
 .language-dropdown {
   background: #1a1a1a;
   border: 1px solid rgba(255, 255, 255, 0.15);
@@ -138,7 +145,6 @@
   border-color: #3b82f6;
 }
 
-/* Size Slider */
 .slider-container {
   display: flex;
   align-items: center;
@@ -177,15 +183,6 @@
   transform: scale(1.15);
 }
 
-.size-slider::-moz-range-thumb {
-  width: 18px;
-  height: 18px;
-  background: #3b82f6;
-  border: none;
-  border-radius: 50%;
-  cursor: pointer;
-}
-
 .slider-value {
   text-align: center;
   color: #9ca3af;
@@ -193,7 +190,6 @@
   margin-top: 8px;
 }
 
-/* Cache Management */
 .cache-buttons {
   display: flex;
   gap: 16px;
@@ -224,4 +220,8 @@
   font-size: 13px;
   color: #6b7280;
   text-align: center;
+}
+
+.hidden {
+  display: none !important;
 }

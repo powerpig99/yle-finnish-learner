@@ -1,3 +1,5 @@
+rm -f yle-dual-sub-extension.zip
+
 zip -r yle-dual-sub-extension.zip \
   manifest.json \
   icons/ \
@@ -12,4 +14,7 @@ zip -r yle-dual-sub-extension.zip \
   controls/ \
   platforms/yle/yle-injected.js \
   lib/ \
-  extension-options-page/dist/
+  extension-options-page/index.html \
+  extension-options-page/options.css \
+  extension-options-page/options.js \
+  -x "*.map" "*.DS_Store" "__MACOSX/*" "* 2.*"

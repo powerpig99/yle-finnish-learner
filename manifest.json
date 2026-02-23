@@ -69,5 +69,5 @@
       "128": "icons/icon.png"
     }
   },
-  "options_page": "extension-options-page/dist/index.html"
+  "options_page": "extension-options-page/index.html"
 }
