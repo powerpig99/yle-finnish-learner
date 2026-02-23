@@ -304,7 +304,11 @@ async function getEffectiveTargetLanguage() {
   try {
     // 1. Check user-configured target language
     const storageSyncInformation = await chrome.storage.sync.get('targetLanguage');
-    if (storageSyncInformation && storageSyncInformation.targetLanguage) {
+    if (
+      storageSyncInformation &&
+      typeof storageSyncInformation.targetLanguage === 'string' &&
+      storageSyncInformation.targetLanguage
+    ) {
       return normalizeLanguageCode(storageSyncInformation.targetLanguage);
     }
 

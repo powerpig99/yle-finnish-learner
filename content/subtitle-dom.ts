@@ -33,7 +33,6 @@ function getSubtitleTextElements(container: HTMLElement): HTMLElement[] {
 function isLikelySubtitleWrapper(element: HTMLElement | null) {
   if (!element) return false;
   if (element.id === "displayed-subtitles-wrapper") return false;
-  if (element.closest?.('.dual-sub-extension-section')) return false;
   if (element.closest?.('#dual-sub-overlay')) return false;
 
   const testId = element.getAttribute('data-testid') || '';

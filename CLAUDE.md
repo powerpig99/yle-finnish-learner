@@ -610,6 +610,35 @@ div[class*="PlayerUI__UI"]:not(.yle-cursor-active) * {
 
 **Files changed:** `content/ui-events.ts`, `styles.css`
 
+### 22. Auto-Pause Double-Fire After Repeat (Session 2026-02-22)
+**Problem:** After repeat (R key), pressing space to resume would immediately re-pause, requiring a second space press. First press appeared to move only a single frame.
+
+**Root Cause:** `scheduleAutoPause()` calculates setTimeout delay from the `seeked` event, but after seek+play there's a ~60ms startup delay before the video actually begins decoding frames. The wall-clock timer fires on time, but the video position lags ~60ms behind expected. Auto-pause fires at e.g. 409.403 instead of target 409.464. When user presses space:
+- Resume at 409.403 → `play` event → `scheduleAutoPause()`
+- Only 3ms until pause point (409.464) → immediately re-pauses
+
+**Solution (`content/settings.ts` — `scheduleAutoPause`):**
+Timer callback now verifies `video.currentTime >= pauseTarget` before pausing. If the video hasn't reached the target (due to seek startup delay), it re-schedules for the remaining time:
+```typescript
+_autoPauseTimeout = setTimeout(function autoPauseCheck() {
+  _autoPauseTimeout = null;
+  if (!autoPauseEnabled) return;
+  const v = document.querySelector('video');
+  if (v && !v.paused) {
+    if (v.currentTime >= pauseTarget) {
+      v.pause();
+    } else {
+      // Re-schedule for remaining time
+      const rem = pauseTarget - v.currentTime;
+      const reDelay = (rem / v.playbackRate) * 1000;
+      _autoPauseTimeout = setTimeout(autoPauseCheck, reDelay);
+    }
+  }
+}, delay);
+```
+
+**Key insight:** Never trust wall-clock setTimeout to correspond exactly to video position. Always verify `video.currentTime` before taking position-dependent actions. Seek-to-play has a startup delay (~60ms) that causes systematic early timer fires.
+
 ---
 
 ## Debugging Methodology

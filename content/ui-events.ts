@@ -191,7 +191,6 @@ document.addEventListener('click', (e) => {
   // Check if click was on control bar area
   const isControlBarClick = target.closest('[class*="BottomControlBar"]') ||
                             target.closest('[class*="TopControlBar"]') ||
-                            target.closest('.dual-sub-extension-section') ||
                             target.closest('[class*="Timeline"]');
 
   if (isControlBarClick) {
@@ -210,72 +209,6 @@ function getOriginalSubtitlesWrapper() {
   }
   return document.querySelector('[data-testid="subtitles-wrapper"]') as HTMLElement | null;
 }
-
-document.addEventListener("change", (e) => {
-  /**
-   * Listen for user interaction events in YLE Areena page,
-   * for example: dual sub switch change event
-   * @param {Event} e
-   */
-  const target = e.target as HTMLInputElement | null;
-  if (!target) return;
-
-  if (target.id === "dual-sub-switch") {
-    dualSubEnabled = target.checked;
-    console.log("DualSubExtension: Dual sub switch changed to:", dualSubEnabled);
-    // Focus video to enable keyboard controls
-    focusVideo();
-    // Save preference to chrome storage
-    chrome.storage.sync.set({ dualSubEnabled }).then(async () => {
-      console.log("DualSubExtension: Saved dualSubEnabled to storage:", dualSubEnabled);
-      // Verify the save worked by reading it back
-      const verify = await chrome.storage.sync.get("dualSubEnabled") as { dualSubEnabled?: boolean };
-      console.log("DualSubExtension: Verified storage value:", verify);
-    }).catch(err => {
-      console.error("DualSubExtension: Error saving dualSubEnabled:", err);
-    });
-
-    // YLE dual sub toggle logic
-    if (target.checked) {
-      const originalSubtitlesWrapper = getOriginalSubtitlesWrapper();
-      if (!originalSubtitlesWrapper) {
-        console.error(
-          "DualSubExtension: This should not happen: " +
-          "When the video is loaded the subtitles wrapper should be there"
-        );
-        target.checked = false;
-        dualSubEnabled = false;
-        return;
-      }
-      originalSubtitlesWrapper.classList.add('dsc-original-hidden');
-      const displayedSubtitlesWrapper = createAndPositionDisplayedSubtitlesWrapper(originalSubtitlesWrapper);
-      displayedSubtitlesWrapper.innerHTML = "";
-      displayedSubtitlesWrapper.style.display = "flex";
-
-      const originalSubtitleElements = getSubtitleTextElements(originalSubtitlesWrapper);
-      if (originalSubtitleElements.length > 0) {
-        addContentToDisplayedSubtitlesWrapper(
-          displayedSubtitlesWrapper,
-          originalSubtitleElements,
-        );
-      }
-      translationQueue.processQueue().then(() => { }).catch((error) => {
-        console.error("DualSubExtension: Error processing translation queue after enabling dual subtitles:", error);
-      });
-    }
-    else {
-      // When dual sub is disabled, keep showing clickable original text
-      // Just remove the translation spans, don't hide the wrapper
-      const displayedSubtitlesWrapper = document.getElementById("displayed-subtitles-wrapper");
-      if (displayedSubtitlesWrapper) {
-        // Remove only translation spans, keep original clickable text
-        const translationSpans = displayedSubtitlesWrapper.querySelectorAll('.translated-text-span');
-        translationSpans.forEach(span => span.remove());
-      }
-      // Keep original YLE subtitles hidden - we show our clickable version instead
-    }
-  }
-});
 
 // SECTION: UNIFIED CONTROL PANEL EVENT LISTENERS
 // ==================================
@@ -317,11 +250,6 @@ document.addEventListener('dscDualSubToggle', (e) => {
     // Keep original YLE subtitles hidden - we show our clickable version instead
   }
 
-  // Also update legacy switch if it exists (for backwards compatibility)
-  const dualSubSwitch = document.getElementById('dual-sub-switch') as HTMLInputElement | null;
-  if (dualSubSwitch && dualSubSwitch.checked !== enabled) {
-    dualSubSwitch.checked = enabled;
-  }
 });
 
 document.addEventListener('dscAutoPauseToggle', (e) => {
@@ -431,38 +359,21 @@ document.addEventListener('yleNativeCaptionsToggled', (e) => {
   const { enabled } = (e as CustomEvent).detail;
   console.info('DualSubExtension: Native YLE captions toggled:', enabled);
 
-  // Update ControlIntegration state (updates panel + saves to storage)
+  let effectiveExtensionEnabled = extensionEnabled;
+
+  // CC toggle flow:
+  // 1) Native CC emits `yleNativeCaptionsToggled`
+  // 2) setCaptionsEnabled may emit `dscExtensionToggle` when effective state changes
+  // 3) `dscExtensionToggle` listener above owns overlay/native visibility switching
   if (typeof ControlIntegration !== 'undefined') {
     ControlIntegration.setCaptionsEnabled(enabled);
+    const state = ControlIntegration.getState();
+    effectiveExtensionEnabled = state.extensionEnabled;
   }
 
-  if (!enabled) {
-    // CC off: disable extension in content script context
-    extensionEnabled = false;
+  extensionEnabled = effectiveExtensionEnabled;
+
+  if (!enabled || !effectiveExtensionEnabled) {
     clearAutoPause();
-
-    const displayedSubtitlesWrapper = document.getElementById('displayed-subtitles-wrapper');
-    if (displayedSubtitlesWrapper) {
-      displayedSubtitlesWrapper.style.display = 'none';
-    }
-    // Don't touch original wrapper — YLE is hiding it
-  } else {
-    // CC on: re-enable extension in content script context
-    extensionEnabled = true;
-
-    const displayedSubtitlesWrapper = document.getElementById('displayed-subtitles-wrapper');
-    if (displayedSubtitlesWrapper) {
-      displayedSubtitlesWrapper.style.display = 'flex';
-    }
-
-    // Re-hide original wrapper for extension processing
-    const originalWrapper = getOriginalSubtitlesWrapper();
-    if (originalWrapper) {
-      originalWrapper.classList.add('dsc-original-hidden');
-    }
-
-    if (autoPauseEnabled) {
-      scheduleAutoPause();
-    }
   }
 });

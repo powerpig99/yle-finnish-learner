@@ -20,6 +20,7 @@
  * @property {string} targetLanguage - The target language code (e.g., "EN-US")
  * @property {string} translation - The translated word
  * @property {number} lastAccessedDays - Last accessed time in days since Unix epoch
+ * @property {string} [source] - Source of translation ('wiktionary' or 'llm')
  */
 
 const DATABASE = "YleDualSubCache"

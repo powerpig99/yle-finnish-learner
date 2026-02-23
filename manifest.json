@@ -17,7 +17,6 @@
       "run_at": "document_end",
       "js": [
         "lib/lamejs.min.js",
-        "dist/platforms/yle/yle-adapter.js",
         "controls/control-icons.js",
         "controls/control-actions.js",
         "controls/control-keyboard.js",

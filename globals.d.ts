@@ -46,7 +46,6 @@ interface Window {
     _targetLanguage?: string;
     fullSubtitles?: any[];
     clearWordCache?: () => Promise<void>;
-    YLEAdapter?: YLEAdapter;
 }
 
 // Service Worker globals
@@ -149,42 +148,20 @@ interface DeepLTokenInfoInStorage {
     selected: boolean;
 }
 
-// Platform adapter globals
-interface YLEAdapter {
-    name: string;
-    sourceLanguage: string | null;
-    _detectedLanguage: string | null;
-    SELECTORS: Record<string, string>;
-    getControlPanelMountConfig: () => unknown;
-    getKeyboardConfig: () => unknown;
-    isMatch: () => boolean;
-    isVideoPage: () => boolean;
-    getVideoElement: () => HTMLVideoElement | null;
-    getPlayerUI: () => HTMLElement | null;
-    getSubtitleWrapper: () => HTMLElement | null;
-    getControlBarContainer: () => Promise<HTMLElement | null>;
-    getVideoTitle: () => Promise<string | null>;
-    isSubtitleMutation: (mutation: MutationRecord) => boolean;
-    isVideoAppearMutation: (mutation: MutationRecord) => boolean;
-    focusPlayer: () => void;
-    showControls: () => void;
-    hideControls: () => void;
-}
-declare var YLEAdapter: YLEAdapter;
-
 // Control panel globals (from controls/*)
 declare const ControlIntegration: {
     init: (options?: any) => Promise<any>;
     isInitialized: () => boolean;
     getState: () => any;
-    setState?: (state: any) => void;
-    updateState?: (state: any) => void;
-    setSubtitles?: (subtitles: any[]) => void;
-    setSubtitleTimestamps?: (timestamps: any[]) => void;
-    setTargetLanguage?: (language: string) => void;
-    setSourceLanguage?: (language: string | null, options?: any) => void;
-    setCaptionsEnabled?: (enabled: boolean) => void;
-    _handleExtensionToggle?: (enabled: boolean) => void;
+    updateState: (state: any) => void;
+    setSubtitles: (subtitles: any[]) => void;
+    setSubtitleTimestamps: (timestamps: any[]) => void;
+    setTargetLanguage: (language: string) => void;
+    setSourceLanguage: (language: string | null, options?: any) => void;
+    setCaptionsEnabled: (enabled: boolean) => void;
+    _handleExtensionToggle: (enabled: boolean) => void;
+    cleanup: () => void;
+    ensureMounted: () => Promise<boolean>;
 };
 declare const ControlPanel: any;
 declare const ControlActions: any;

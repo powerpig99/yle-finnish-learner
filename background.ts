@@ -360,7 +360,7 @@ async function clearSubtitleCachesInTabs() {
 // TRANSLATION ROUTER
 // ==================================
 
-async function sleep(ms) {
+async function backgroundSleep(ms) {
   return new Promise<void>(resolve => setTimeout(resolve, ms));
 }
 
@@ -391,14 +391,14 @@ async function translateTextsWithErrorHandling(texts, targetLanguage) {
       const errorMsg = result[1];
       if (typeof errorMsg === 'string' && errorMsg.includes('rate limit')) {
         if (attempt < MAX_RETRIES - 1) {
-          await sleep(calculateBackoffDelay(attempt));
+          await backgroundSleep(calculateBackoffDelay(attempt));
           continue;
         }
       }
       return result;
     } catch (error) {
       if (attempt < MAX_RETRIES - 1) {
-        await sleep(calculateBackoffDelay(attempt));
+        await backgroundSleep(calculateBackoffDelay(attempt));
         continue;
       }
       return [false, error.message || 'Translation failed'];
@@ -733,7 +733,7 @@ async function translateWithGoogle(texts, targetLanguage) {
 
       // Add delay between requests to avoid rate limiting (except for first request)
       if (index > 0) {
-        await sleep(200); // 200ms delay between requests (increased from 150ms)
+        await backgroundSleep(200); // 200ms delay between requests (increased from 150ms)
       }
 
       // Use sl=auto for auto-detection of source language (not hardcoded to Finnish)

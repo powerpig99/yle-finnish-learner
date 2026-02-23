@@ -15,7 +15,6 @@
     "background.ts",
     "contentscript.ts",
     "content/**/*.ts",
-    "platforms/yle/yle-adapter.ts",
     "globals.d.ts"
   ],
   "exclude": [

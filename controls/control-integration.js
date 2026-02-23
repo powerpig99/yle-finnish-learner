@@ -16,6 +16,21 @@ const ControlIntegration = {
   /** @type {boolean} */
   _initialized: false,  // Whether init() has completed loading preferences
 
+  /** @type {Promise<ControlPanel|null>|null} */
+  _initPromise: null,
+
+  /** @type {ReturnType<typeof setTimeout>|null} */
+  _remountTimer: null,
+
+  /** @type {boolean} */
+  _remountScheduled: false,
+
+  /** @type {boolean} */
+  _captionsEnabled: true,
+
+  /** @type {boolean} */
+  _userExtensionEnabled: true,
+
   /** @type {Object} */
   _state: {
     dualSubEnabled: false,
@@ -38,53 +53,86 @@ const ControlIntegration = {
    * @returns {Promise<ControlPanel|null>}
    */
   async init(options = {}) {
-    // Load preferences from storage
-    await this._loadPreferences();
-
-    // Override with provided options
-    Object.assign(this._state, options);
-
-    // Mark as initialized - preferences are now loaded
-    this._initialized = true;
-
-    // Create the control panel for YLE
-    // Simplified: no auto-disable logic, user controls everything
-    this._panel = new ControlPanel({
-      initialState: {
+    if (this._initPromise) {
+      const panel = await this._initPromise;
+      this._applyInitOptions(options);
+      this.updateState({
         dualSubEnabled: this._state.dualSubEnabled,
         autoPauseEnabled: this._state.autoPauseEnabled,
         playbackSpeed: this._state.playbackSpeed,
         sourceLanguage: this._state.sourceLanguage,
         targetLanguage: this._state.targetLanguage,
-        extensionEnabled: this._state.extensionEnabled,
-        availableLanguages: options.availableLanguages || []
-      },
-      callbacks: {
-        onDualSubToggle: this._handleDualSubToggle.bind(this),
-        onAutoPauseToggle: this._handleAutoPauseToggle.bind(this),
-        onPrevSubtitle: this._handlePrevSubtitle.bind(this),
-        onNextSubtitle: this._handleNextSubtitle.bind(this),
-        onRepeatSubtitle: this._handleRepeatSubtitle.bind(this),
-        onSpeedChange: this._handleSpeedChange.bind(this),
-        onSourceLangChange: this._handleSourceLangChange.bind(this),
-        onSettingsClick: this._handleSettingsClick.bind(this),
-        onPlayPause: this._handlePlayPause.bind(this),
-        onDownloadAudio: this._handleDownloadAudio.bind(this),
-        onExtensionToggle: this._handleExtensionToggle.bind(this)
-      }
-    });
-
-    // Mount the panel with retry logic
-    let element = await this._panel.mount();
-
-    if (element) {
-      console.info('DualSubExtension: ControlIntegration initialized for YLE Areena');
-    } else {
-      // Schedule retry mounts if initial mount fails
-      this._scheduleRemount();
+        extensionEnabled: this._userExtensionEnabled,
+        ccEnabled: this._captionsEnabled
+      });
+      return panel;
     }
 
-    return this._panel;
+    this._initPromise = (async () => {
+      // Load preferences from storage first
+      await this._loadPreferences();
+      this._applyInitOptions(options);
+
+      // Mark as initialized - preferences are now loaded
+      this._initialized = true;
+
+      if (!this._panel) {
+        // Create the control panel for YLE
+        this._panel = new ControlPanel({
+          initialState: {
+            dualSubEnabled: this._state.dualSubEnabled,
+            autoPauseEnabled: this._state.autoPauseEnabled,
+            playbackSpeed: this._state.playbackSpeed,
+            sourceLanguage: this._state.sourceLanguage,
+            targetLanguage: this._state.targetLanguage,
+            extensionEnabled: this._state.extensionEnabled,
+            ccEnabled: this._captionsEnabled,
+            availableLanguages: options.availableLanguages || []
+          },
+          callbacks: {
+            onDualSubToggle: this._handleDualSubToggle.bind(this),
+            onAutoPauseToggle: this._handleAutoPauseToggle.bind(this),
+            onPrevSubtitle: this._handlePrevSubtitle.bind(this),
+            onNextSubtitle: this._handleNextSubtitle.bind(this),
+            onRepeatSubtitle: this._handleRepeatSubtitle.bind(this),
+            onSpeedChange: this._handleSpeedChange.bind(this),
+            onSourceLangChange: this._handleSourceLangChange.bind(this),
+            onSettingsClick: this._handleSettingsClick.bind(this),
+            onPlayPause: this._handlePlayPause.bind(this),
+            onDownloadAudio: this._handleDownloadAudio.bind(this),
+            onExtensionToggle: this._handleExtensionToggle.bind(this)
+          }
+        });
+      } else {
+        this._panel.updateState({
+          dualSubEnabled: this._state.dualSubEnabled,
+          autoPauseEnabled: this._state.autoPauseEnabled,
+          playbackSpeed: this._state.playbackSpeed,
+          sourceLanguage: this._state.sourceLanguage,
+          targetLanguage: this._state.targetLanguage,
+          extensionEnabled: this._state.extensionEnabled,
+          ccEnabled: this._captionsEnabled
+        });
+      }
+
+      // Mount or remount the panel with retry logic
+      const element = this._panel.isMounted() ? this._panel.element : await this._panel.mount();
+
+      if (element) {
+        console.info('DualSubExtension: ControlIntegration initialized for YLE Areena');
+      } else {
+        // Schedule retry mounts if initial mount fails
+        this._scheduleRemount();
+      }
+
+      return this._panel;
+    })();
+
+    try {
+      return await this._initPromise;
+    } finally {
+      this._initPromise = null;
+    }
   },
 
   /**
@@ -101,6 +149,7 @@ const ControlIntegration = {
     const attemptRemount = async () => {
       if (!this._panel || this._panel.isMounted()) {
         this._remountScheduled = false;
+        this._remountTimer = null;
         return;
       }
 
@@ -110,16 +159,18 @@ const ControlIntegration = {
       if (element) {
         console.info('DualSubExtension: Remount successful');
         this._remountScheduled = false;
+        this._remountTimer = null;
       } else if (retryIndex < retryDelays.length - 1) {
         retryIndex++;
-        setTimeout(attemptRemount, retryDelays[retryIndex]);
+        this._remountTimer = setTimeout(attemptRemount, retryDelays[retryIndex]);
       } else {
         console.error('DualSubExtension: Could not find mount target after all retries');
         this._remountScheduled = false;
+        this._remountTimer = null;
       }
     };
 
-    setTimeout(attemptRemount, retryDelays[0]);
+    this._remountTimer = setTimeout(attemptRemount, retryDelays[0]);
   },
 
 
@@ -128,6 +179,10 @@ const ControlIntegration = {
    */
   cleanup() {
     this._remountScheduled = false;
+    if (this._remountTimer) {
+      clearTimeout(this._remountTimer);
+      this._remountTimer = null;
+    }
     if (this._panel) {
       this._panel.unmount();
       this._panel = null;
@@ -160,8 +215,16 @@ const ControlIntegration = {
    */
   updateState(state) {
     Object.assign(this._state, state);
+    if (typeof state.extensionEnabled === 'boolean') {
+      this._userExtensionEnabled = state.extensionEnabled;
+      this._state.extensionEnabled = this._userExtensionEnabled && this._captionsEnabled;
+    }
     if (this._panel) {
-      this._panel.updateState(state);
+      this._panel.updateState({
+        ...state,
+        extensionEnabled: this._state.extensionEnabled,
+        ccEnabled: this._captionsEnabled
+      });
     }
   },
 
@@ -251,7 +314,8 @@ const ControlIntegration = {
         this._state.sourceLanguage = result.ytSourceLanguage;
       }
       // Load extensionEnabled (default to true)
-      this._state.extensionEnabled = result.extensionEnabled !== false;
+      this._userExtensionEnabled = result.extensionEnabled !== false;
+      this._state.extensionEnabled = this._userExtensionEnabled && this._captionsEnabled;
 
       // Load effective target language
       if (typeof getEffectiveTargetLanguage === 'function') {
@@ -282,38 +346,34 @@ const ControlIntegration = {
    */
   setCaptionsEnabled(enabled) {
     console.info('DualSubExtension: setCaptionsEnabled:', enabled);
+    const previousEffective = this._state.extensionEnabled;
+    this._captionsEnabled = enabled;
+    this._state.extensionEnabled = this._userExtensionEnabled && this._captionsEnabled;
 
-    if (!enabled) {
-      // CC off: disable extension in-memory only (don't persist to storage — that's only for explicit user toggle)
-      this._state.extensionEnabled = false;
+    if (this._panel) {
+      this._panel.updateState({
+        ccEnabled: this._captionsEnabled,
+        extensionEnabled: this._state.extensionEnabled,
+        sourceLanguage: this._captionsEnabled ? this._state.sourceLanguage : null
+      });
+    }
 
-      if (this._panel) {
-        this._panel.updateState({
-          ccEnabled: false,
-          extensionEnabled: false,
-          sourceLanguage: null
-        });
-      }
-
-      document.dispatchEvent(new CustomEvent('dscCaptionsStateChanged', {
-        detail: { captionsEnabled: false, extensionEnabled: false, dualSubEnabled: this._state.dualSubEnabled }
-      }));
-    } else {
-      // CC on: re-enable extension in-memory only (don't persist to storage — that's only for explicit user toggle)
-      this._state.extensionEnabled = true;
-
-      if (this._panel) {
-        this._panel.updateState({
-          ccEnabled: true,
-          extensionEnabled: true,
-          sourceLanguage: this._state.sourceLanguage
-        });
-      }
-
-      document.dispatchEvent(new CustomEvent('dscCaptionsStateChanged', {
-        detail: { captionsEnabled: true, extensionEnabled: true, dualSubEnabled: this._state.dualSubEnabled }
+    if (previousEffective !== this._state.extensionEnabled) {
+      document.dispatchEvent(new CustomEvent('dscExtensionToggle', {
+        detail: {
+          enabled: this._state.extensionEnabled,
+          dualSubEnabled: this._state.dualSubEnabled
+        }
       }));
     }
+
+    document.dispatchEvent(new CustomEvent('dscCaptionsStateChanged', {
+      detail: {
+        captionsEnabled: this._captionsEnabled,
+        extensionEnabled: this._state.extensionEnabled,
+        dualSubEnabled: this._state.dualSubEnabled
+      }
+    }));
   },
 
   /**
@@ -322,7 +382,8 @@ const ControlIntegration = {
    * @param {boolean} enabled - Whether extension should be enabled
    */
   async _handleExtensionToggle(enabled) {
-    this._state.extensionEnabled = enabled;
+    this._userExtensionEnabled = enabled;
+    this._state.extensionEnabled = this._userExtensionEnabled && this._captionsEnabled;
 
     // Save to storage
     if (typeof saveExtensionEnabledToStorage === 'function') {
@@ -334,20 +395,43 @@ const ControlIntegration = {
     // Update panel UI if mounted
     if (this._panel) {
       this._panel.updateState({
-        extensionEnabled: enabled
+        extensionEnabled: this._state.extensionEnabled,
+        ccEnabled: this._captionsEnabled
       });
     }
 
     // Dispatch event for contentscript.js to handle
     const event = new CustomEvent('dscExtensionToggle', {
       detail: {
-        enabled,
+        enabled: this._state.extensionEnabled,
         dualSubEnabled: this._state.dualSubEnabled
       }
     });
     document.dispatchEvent(event);
 
-    console.info('DualSubExtension: Extension toggled:', enabled);
+    console.info('DualSubExtension: Extension toggled:', enabled, 'effective:', this._state.extensionEnabled);
+  },
+
+  /**
+   * Merge init options into state while preserving user preference semantics.
+   * @param {Object} options
+   * @private
+   */
+  _applyInitOptions(options = {}) {
+    if (typeof options.captionsEnabled === 'boolean') {
+      this._captionsEnabled = options.captionsEnabled;
+    }
+
+    if (typeof options.extensionEnabled === 'boolean') {
+      this._userExtensionEnabled = options.extensionEnabled;
+    }
+
+    const stateUpdates = { ...options };
+    delete stateUpdates.captionsEnabled;
+    delete stateUpdates.extensionEnabled;
+    Object.assign(this._state, stateUpdates);
+
+    this._state.extensionEnabled = this._userExtensionEnabled && this._captionsEnabled;
   },
 
   /**

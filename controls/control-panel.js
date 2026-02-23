@@ -77,12 +77,6 @@ class ControlPanel {
     // Remove existing panel if present
     this.unmount();
 
-    // Also remove any legacy control panels
-    const legacyControls = document.querySelectorAll('.dual-sub-extension-section');
-    legacyControls.forEach(el => el.remove());
-    const legacyYtControls = document.getElementById('dual-sub-yt-controls');
-    if (legacyYtControls) legacyYtControls.remove();
-
     // Create the panel element
     this.element = this._createPanel();
 

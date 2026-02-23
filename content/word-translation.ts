@@ -167,7 +167,7 @@ async function showWordTooltip(word: string, wordElement: HTMLElement, context: 
   // Create tooltip with Wiktionary link placeholder
   // Use target language for Wiktionary subdomain (falls back to 'en' if not supported)
   const wiktLang = typeof getWiktionaryLang === 'function' ? getWiktionaryLang(targetLanguage) : 'en';
-  const sourceLangSection = detectedSourceLanguage ? `#${getLanguageName(detectedSourceLanguage.toUpperCase())}` : '';
+  const sourceLangSection = detectedSourceLanguage ? `#${getWordLanguageName(detectedSourceLanguage.toUpperCase())}` : '';
   const wiktionaryUrl = `https://${wiktLang}.wiktionary.org/wiki/${encodeURIComponent(word.toLowerCase())}${sourceLangSection}`;
   const tooltip = document.createElement("div");
   tooltip.className = "word-tooltip";
@@ -403,7 +403,7 @@ async function translateWord(word: string, context: { current: string; before: s
   const normalizedWord = word.toLowerCase().trim();
   // Use target language for Wiktionary subdomain (falls back to 'en' if not supported)
   const wiktLang = typeof getWiktionaryLang === 'function' ? getWiktionaryLang(targetLanguage) : 'en';
-  const sourceLangSection = detectedSourceLanguage ? `#${getLanguageName(detectedSourceLanguage.toUpperCase())}` : '';
+  const sourceLangSection = detectedSourceLanguage ? `#${getWordLanguageName(detectedSourceLanguage.toUpperCase())}` : '';
   const wiktionaryUrl = `https://${wiktLang}.wiktionary.org/wiki/${encodeURIComponent(normalizedWord)}${sourceLangSection}`;
 
   // Check in-memory cache first
@@ -501,7 +501,7 @@ async function translateWordWithLLM(word: string, context: { current: string; be
     contextText += '\nFollowing lines:\n' + context.after.map(s => `  "${s}"`).join('\n');
   }
 
-  const langName = getLanguageName(targetLanguage);
+  const langName = getWordLanguageName(targetLanguage);
 
   try {
     const response = await safeSendMessage({
@@ -533,7 +533,7 @@ async function translateWordWithLLM(word: string, context: { current: string; be
  * @param {string} langCode
  * @returns {string}
  */
-function getLanguageName(langCode: string) {
+function getWordLanguageName(langCode: string) {
   const languages: Record<string, string> = {
     'EN-US': 'English', 'EN-GB': 'English', 'DE': 'German', 'FR': 'French',
     'ES': 'Spanish', 'IT': 'Italian', 'NL': 'Dutch', 'PL': 'Polish',
@@ -600,7 +600,7 @@ async function fetchWiktionaryDefinition(word: string) {
       }
     }
 
-    throw new Error(`No ${getLanguageName(sourceLangCode.toUpperCase())} definition found`);
+    throw new Error(`No ${getWordLanguageName(sourceLangCode.toUpperCase())} definition found`);
   } catch (error) {
     const message = (error as Error).message;
     if (message.includes('Wiktionary') || message.includes('not found') || message.includes('definition')) {

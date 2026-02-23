@@ -151,7 +151,7 @@ async function showWordTooltip(word, wordElement, context) {
     // Create tooltip with Wiktionary link placeholder
     // Use target language for Wiktionary subdomain (falls back to 'en' if not supported)
     const wiktLang = typeof getWiktionaryLang === 'function' ? getWiktionaryLang(targetLanguage) : 'en';
-    const sourceLangSection = detectedSourceLanguage ? `#${getLanguageName(detectedSourceLanguage.toUpperCase())}` : '';
+    const sourceLangSection = detectedSourceLanguage ? `#${getWordLanguageName(detectedSourceLanguage.toUpperCase())}` : '';
     const wiktionaryUrl = `https://${wiktLang}.wiktionary.org/wiki/${encodeURIComponent(word.toLowerCase())}${sourceLangSection}`;
     const tooltip = document.createElement("div");
     tooltip.className = "word-tooltip";
@@ -375,7 +375,7 @@ async function translateWord(word, context) {
     const normalizedWord = word.toLowerCase().trim();
     // Use target language for Wiktionary subdomain (falls back to 'en' if not supported)
     const wiktLang = typeof getWiktionaryLang === 'function' ? getWiktionaryLang(targetLanguage) : 'en';
-    const sourceLangSection = detectedSourceLanguage ? `#${getLanguageName(detectedSourceLanguage.toUpperCase())}` : '';
+    const sourceLangSection = detectedSourceLanguage ? `#${getWordLanguageName(detectedSourceLanguage.toUpperCase())}` : '';
     const wiktionaryUrl = `https://${wiktLang}.wiktionary.org/wiki/${encodeURIComponent(normalizedWord)}${sourceLangSection}`;
     // Check in-memory cache first
     const cacheKey = `${normalizedWord}:${targetLanguage}`;
@@ -466,7 +466,7 @@ async function translateWordWithLLM(word, context) {
     if (context.after.length > 0) {
         contextText += '\nFollowing lines:\n' + context.after.map(s => `  "${s}"`).join('\n');
     }
-    const langName = getLanguageName(targetLanguage);
+    const langName = getWordLanguageName(targetLanguage);
     try {
         const response = await safeSendMessage({
             action: 'translateWordWithContext',
@@ -496,7 +496,7 @@ async function translateWordWithLLM(word, context) {
  * @param {string} langCode
  * @returns {string}
  */
-function getLanguageName(langCode) {
+function getWordLanguageName(langCode) {
     const languages = {
         'EN-US': 'English', 'EN-GB': 'English', 'DE': 'German', 'FR': 'French',
         'ES': 'Spanish', 'IT': 'Italian', 'NL': 'Dutch', 'PL': 'Polish',
@@ -554,7 +554,7 @@ async function fetchWiktionaryDefinition(word) {
                 return definitions.join('; ');
             }
         }
-        throw new Error(`No ${getLanguageName(sourceLangCode.toUpperCase())} definition found`);
+        throw new Error(`No ${getWordLanguageName(sourceLangCode.toUpperCase())} definition found`);
     }
     catch (error) {
         const message = error.message;

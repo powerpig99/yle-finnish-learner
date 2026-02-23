@@ -2,10 +2,6 @@
 // YLE AREENA EXTENSION
 // ==================================
 
-/* global YLEAdapter */
-
-const platformAdapter = typeof YLEAdapter !== 'undefined' ? YLEAdapter : null;
-
 console.info('DualSubExtension: YLE Areena extension loaded');
 
 // ==================================
@@ -15,48 +11,6 @@ console.info('DualSubExtension: YLE Areena extension loaded');
 /* global loadTargetLanguageFromChromeStorageSync, loadSelectedTokenFromChromeStorageSync */
 /* global openDatabase, saveSubtitlesBatch, loadSubtitlesByMovieName, upsertMovieMetadata, cleanupOldMovieData */
 /* global getWordTranslation, saveWordTranslation, cleanupOldWordTranslations, clearAllWordTranslations */
-
-/**
- * Check if the extension context is still valid
- * @returns {boolean}
- */
-function isExtensionContextValid() {
-  try {
-    return chrome.runtime && chrome.runtime.id !== undefined;
-  } catch {
-    return false;
-  }
-}
-
-/**
- * Safely send a message to the background script
- * Handles cases where the extension context is invalidated
- * @param {Object} message - The message to send
- * @returns {Promise<any>} - The response or null if context is invalid
- */
-async function safeSendMessage(message) {
-  if (!isExtensionContextValid()) {
-    console.warn('YleDualSubExtension: Extension context invalidated, message not sent');
-    if (typeof showExtensionInvalidatedToast === 'function') {
-      showExtensionInvalidatedToast();
-    }
-    return null;
-  }
-
-  try {
-    return await chrome.runtime.sendMessage(message);
-  } catch (error) {
-    if (error.message?.includes('Extension context invalidated') ||
-        error.message?.includes('message port closed')) {
-      console.warn('YleDualSubExtension: Extension context invalidated');
-      if (typeof showExtensionInvalidatedToast === 'function') {
-        showExtensionInvalidatedToast();
-      }
-      return null;
-    }
-    throw error;
-  }
-}
 
 /** @type {Map<string, string>}
  * Shared translation map, with key is normalized Finnish text, and value is translated text
@@ -100,11 +54,6 @@ async function initializeUnifiedControlPanel() {
     console.log('DualSubExtension: ControlIntegration already initialized, skipping');
     return;
   }
-  // If panel was removed from DOM (e.g., YLE closed video), reset the flag
-  if (_unifiedPanelInitializing && !isActuallyInitialized) {
-    console.log('DualSubExtension: Panel was removed from DOM, resetting initialization flag');
-    _unifiedPanelInitializing = false;
-  }
   if (_unifiedPanelInitializing) {
     console.log('DualSubExtension: Panel currently initializing, skipping');
     return;
@@ -113,13 +62,21 @@ async function initializeUnifiedControlPanel() {
   // Mark as initializing to prevent concurrent calls
   _unifiedPanelInitializing = true;
 
-  // Wait for platform adapter to be ready
-  console.log('DualSubExtension: Waiting 500ms for platform adapter...');
+  // Wait briefly for player controls/container to settle before mounting panel
+  console.log('DualSubExtension: Waiting 500ms for player UI to settle...');
   await new Promise<void>(resolve => setTimeout(resolve, 500));
 
   try {
+    const waitForSettingsReady = (window as unknown as { waitForSettingsBootstrap?: () => Promise<void> }).waitForSettingsBootstrap;
+    if (typeof waitForSettingsReady === 'function') {
+      await waitForSettingsReady();
+    }
+
     // Check initial captions state (YLE requires manual captions enable)
-    const captionsEnabled = fullSubtitles.length > 0 || !!detectedSourceLanguage;
+    const video = document.querySelector('video') as HTMLVideoElement | null;
+    const captionsEnabled = video
+      ? Array.from(video.textTracks).some(t => t.mode !== 'disabled')
+      : (fullSubtitles.length > 0 || !!detectedSourceLanguage);
     console.log('DualSubExtension: YLE captions initial state:', captionsEnabled);
 
     console.log('DualSubExtension: Calling ControlIntegration.init with state:', {
@@ -157,7 +114,6 @@ async function initializeUnifiedControlPanel() {
       // After init, show overlay if conditions are met (CC on + extension on)
       const state = ControlIntegration.getState();
       console.info('DualSubExtension: Initial state after init:', {
-        captionsEnabled: state.captionsEnabled,
         extensionEnabled: state.extensionEnabled,
         dualSubEnabled: state.dualSubEnabled
       });
@@ -165,8 +121,10 @@ async function initializeUnifiedControlPanel() {
       // Update global variable from loaded state
       extensionEnabled = state.extensionEnabled;
       dualSubEnabled = state.dualSubEnabled;
+      autoPauseEnabled = state.autoPauseEnabled;
+      playbackSpeed = state.playbackSpeed;
 
-      if (state.captionsEnabled && state.extensionEnabled) {
+      if (captionsEnabled && state.extensionEnabled) {
         // Show our overlay
         const extensionOverlay = document.getElementById('dual-sub-overlay');
         if (extensionOverlay) {
@@ -177,7 +135,7 @@ async function initializeUnifiedControlPanel() {
           displayedSubtitlesWrapper.style.display = 'flex';
         }
         console.info('DualSubExtension: Initial state: CC on + Extension on - showing our overlay');
-      } else if (state.captionsEnabled && !state.extensionEnabled) {
+      } else if (captionsEnabled && !state.extensionEnabled) {
         console.info('DualSubExtension: Initial state: CC on + Extension off - showing native captions');
       }
     } else {
@@ -186,9 +144,8 @@ async function initializeUnifiedControlPanel() {
   } catch (error) {
     console.error('DualSubExtension: Error initializing unified control panel:', error);
   } finally {
-    // Reset flag after initialization completes (success or failure)
-    // Note: Keep it true to prevent re-initialization, only reset on cleanup
-    // _unifiedPanelInitializing = false;
+    // Always release the init lock so future remount attempts can proceed.
+    _unifiedPanelInitializing = false;
   }
 }
 

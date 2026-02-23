@@ -310,7 +310,7 @@ async function clearSubtitleCachesInTabs() {
 // ==================================
 // TRANSLATION ROUTER
 // ==================================
-async function sleep(ms) {
+async function backgroundSleep(ms) {
     return new Promise(resolve => setTimeout(resolve, ms));
 }
 function calculateBackoffDelay(attempt) {
@@ -337,7 +337,7 @@ async function translateTextsWithErrorHandling(texts, targetLanguage) {
             const errorMsg = result[1];
             if (typeof errorMsg === 'string' && errorMsg.includes('rate limit')) {
                 if (attempt < MAX_RETRIES - 1) {
-                    await sleep(calculateBackoffDelay(attempt));
+                    await backgroundSleep(calculateBackoffDelay(attempt));
                     continue;
                 }
             }
@@ -345,7 +345,7 @@ async function translateTextsWithErrorHandling(texts, targetLanguage) {
         }
         catch (error) {
             if (attempt < MAX_RETRIES - 1) {
-                await sleep(calculateBackoffDelay(attempt));
+                await backgroundSleep(calculateBackoffDelay(attempt));
                 continue;
             }
             return [false, error.message || 'Translation failed'];
@@ -651,7 +651,7 @@ async function translateWithGoogle(texts, targetLanguage) {
             const text = texts[index];
             // Add delay between requests to avoid rate limiting (except for first request)
             if (index > 0) {
-                await sleep(200); // 200ms delay between requests (increased from 150ms)
+                await backgroundSleep(200); // 200ms delay between requests (increased from 150ms)
             }
             // Use sl=auto for auto-detection of source language (not hardcoded to Finnish)
             const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=${googleLang}&dt=t&q=${encodeURIComponent(text)}`;

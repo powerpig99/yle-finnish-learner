@@ -12,7 +12,6 @@ loadTargetLanguageFromChromeStorageSync().then((loadedTargetLanguage) => {
 
 // State of Dual Sub Switch, to manage whether to add display subtitles wrapper
 let dualSubEnabled = false;
-let dualSubPreferenceLoaded = false;
 
 /**
  * Load dual sub preference from Chrome storage
@@ -27,22 +26,12 @@ async function loadDualSubPreference() {
     } else {
       console.log("YleDualSubExtension: No dual sub preference found in storage, using default:", dualSubEnabled);
     }
-    dualSubPreferenceLoaded = true;
-    // Update checkbox if it exists
-    const dualSubSwitch = document.getElementById("dual-sub-switch") as HTMLInputElement | null;
-    if (dualSubSwitch) {
-      dualSubSwitch.checked = dualSubEnabled;
-    }
     return dualSubEnabled;
   } catch (error) {
     console.warn("YleDualSubExtension: Error loading dual sub preference:", error);
-    dualSubPreferenceLoaded = true;
     return dualSubEnabled;
   }
 }
-
-// Load dual sub preference on startup
-loadDualSubPreference();
 
 // State of Auto-Pause feature
 let autoPauseEnabled = false;
@@ -75,9 +64,6 @@ async function loadExtensionEnabledState() {
     extensionEnabled = true;
   }
 }
-
-// Load extension enabled state on startup
-loadExtensionEnabledState();
 
 /**
  * Check if subtitles should be processed based on extension state
@@ -114,13 +100,21 @@ function shouldTranslate() {
   return true;
 }
 
-// Load saved playback speed from chrome storage
-chrome.storage.sync.get(['playbackSpeed'], (result: { playbackSpeed?: number }) => {
-  if (result.playbackSpeed) {
-    playbackSpeed = result.playbackSpeed;
-    applyPlaybackSpeed();
+/**
+ * Load playback speed preference from Chrome storage
+ */
+async function loadPlaybackSpeedPreference() {
+  try {
+    const result = await chrome.storage.sync.get(['playbackSpeed']) as { playbackSpeed?: number };
+    if (typeof result.playbackSpeed === 'number') {
+      playbackSpeed = result.playbackSpeed;
+      applyPlaybackSpeed();
+      console.info('DualSubExtension: Loaded playback speed preference:', playbackSpeed);
+    }
+  } catch (error) {
+    console.warn('DualSubExtension: Error loading playback speed preference:', error);
   }
-});
+}
 
 /**
  * Apply the current playback speed to the video element
@@ -241,25 +235,34 @@ function setupVideoSpeedControl() {
     // YLE sets track.mode to 'hidden' when CC is on, 'disabled' when off.
     // The 'change' event fires immediately when the user toggles CC in YLE's menu.
     // No length guard — tracks load asynchronously after the video element appears.
-    let _ccWasActive = Array.from(video.textTracks).some(t => t.mode !== 'disabled');
-    video.textTracks.addEventListener('change', () => {
-      const ccActive = Array.from(video.textTracks).some(t => t.mode !== 'disabled');
-      if (_ccWasActive && !ccActive) {
-        _ccWasActive = false;
-        console.info('DualSubExtension: CC turned OFF (textTrack mode → disabled)');
-        document.dispatchEvent(new CustomEvent('yleNativeCaptionsToggled', {
-          bubbles: true,
-          detail: { enabled: false }
-        }));
-      } else if (!_ccWasActive && ccActive) {
-        _ccWasActive = true;
-        console.info('DualSubExtension: CC turned ON (textTrack mode → active)');
-        document.dispatchEvent(new CustomEvent('yleNativeCaptionsToggled', {
-          bubbles: true,
-          detail: { enabled: true }
-        }));
-      }
-    });
+    const readCcActiveState = () => Array.from(video.textTracks).some(t => t.mode !== 'disabled');
+    const emitCcState = (enabled: boolean, reason: string) => {
+      document.dispatchEvent(new CustomEvent('yleNativeCaptionsToggled', {
+        bubbles: true,
+        detail: { enabled, reason }
+      }));
+    };
+    let _ccWasActive = readCcActiveState();
+
+    const syncCcState = (reason: string) => {
+      const ccActive = readCcActiveState();
+      if (ccActive === _ccWasActive) return;
+      _ccWasActive = ccActive;
+      console.info(`DualSubExtension: CC state changed (${reason}) ->`, ccActive ? 'ON' : 'OFF');
+      emitCcState(ccActive, reason);
+    };
+
+    // Emit initial state so keyboard gating and panel state never stay stale.
+    emitCcState(_ccWasActive, 'init');
+
+    video.textTracks.addEventListener('change', () => syncCcState('change'));
+    video.textTracks.addEventListener('addtrack', () => syncCcState('addtrack'));
+    video.textTracks.addEventListener('removetrack', () => syncCcState('removetrack'));
+
+    // Text tracks may initialize asynchronously after video appears.
+    setTimeout(() => syncCcState('post-init-300ms'), 300);
+    setTimeout(() => syncCcState('post-init-1000ms'), 1000);
+
     console.info('DualSubExtension: TextTrack CC detection initialized, ccActive:', _ccWasActive);
   }
 }
@@ -334,34 +337,20 @@ async function checkHasValidProvider() {
  * @param {boolean} hasSelectedToken
  */
 function _handleDualSubBehaviourBasedOnSelectedToken(hasSelectedToken: boolean) {
-  const warningSection = document.querySelector(".dual-sub-warning") as HTMLElement | null;
-  const dualSubSwitch = document.getElementById("dual-sub-switch") as HTMLInputElement | null;
-  if (hasSelectedToken) {
-    if (warningSection) {
-      warningSection.style.display = "none";
-    }
-    if (dualSubSwitch) {
-      dualSubSwitch.disabled = false;
-    }
-  } else {
-    if (warningSection) {
-      warningSection.style.display = "inline-block";
-    }
-    if (dualSubSwitch) {
-      if (dualSubSwitch.checked) {
-        dualSubSwitch.click();
-      }
-      dualSubSwitch.disabled = true;
-    }
-  }
-  const warningPopover = document.querySelector(".dual-sub-warning__popover") as HTMLElement | null;
-  if (warningPopover) {
-    warningPopover.classList.remove("active");
+  // Unified control panel migration: warning state is managed by dsc panel.
+  if (typeof ControlIntegration !== 'undefined') {
+    ControlIntegration.updateState({
+      showWarning: !hasSelectedToken,
+      warningMessage: hasSelectedToken ? '' : 'Translation provider not configured'
+    });
   }
 }
 
 // Auto-pause timeout ID for the setTimeout-based approach
 let _autoPauseTimeout: ReturnType<typeof setTimeout> | null = null;
+let _autoPauseLookupRetryCount = 0;
+const AUTO_PAUSE_LOOKUP_RETRY_LIMIT = 3;
+const AUTO_PAUSE_LOOKUP_RETRY_DELAY_MS = 120;
 
 // Current subtitle endTime, set by subtitle-dom.ts when a subtitle is displayed.
 // This is the source of truth for auto-pause — avoids time-based lookup issues
@@ -375,6 +364,21 @@ let _currentSubtitleEndTime: number | null = null;
  */
 function setCurrentSubtitleEndTime(endTime: number | null) {
   _currentSubtitleEndTime = endTime;
+  if (endTime !== null) {
+    _autoPauseLookupRetryCount = 0;
+  }
+}
+
+function scheduleAutoPauseLookupRetry() {
+  if (_autoPauseLookupRetryCount >= AUTO_PAUSE_LOOKUP_RETRY_LIMIT) {
+    return;
+  }
+
+  _autoPauseLookupRetryCount++;
+  _autoPauseTimeout = setTimeout(() => {
+    _autoPauseTimeout = null;
+    scheduleAutoPause(true);
+  }, AUTO_PAUSE_LOOKUP_RETRY_DELAY_MS);
 }
 
 /**
@@ -385,9 +389,12 @@ function setCurrentSubtitleEndTime(endTime: number | null) {
  *
  * Called from: subtitle DOM mutation, video seeked/play/ratechange events.
  */
-function scheduleAutoPause() {
+function scheduleAutoPause(fromRetry = false) {
   // Clear any existing timer first
-  clearAutoPause();
+  clearAutoPause(false);
+  if (!fromRetry) {
+    _autoPauseLookupRetryCount = 0;
+  }
 
   if (!autoPauseEnabled || !extensionEnabled) {
     return;
@@ -414,6 +421,7 @@ function scheduleAutoPause() {
     // Fallback: look up by currentTime (for seeked/play/ratechange events, or stale endTime)
     const subtitles = window.fullSubtitles;
     if (!subtitles || subtitles.length === 0) {
+      scheduleAutoPauseLookupRetry();
       return;
     }
     const currentTime = video.currentTime;
@@ -425,9 +433,12 @@ function scheduleAutoPause() {
       }
     }
     if (endTime === null) {
+      scheduleAutoPauseLookupRetry();
       return;
     }
   }
+
+  _autoPauseLookupRetryCount = 0;
 
   const currentTime = video.currentTime;
 
@@ -441,13 +452,23 @@ function scheduleAutoPause() {
   const delay = (remaining / video.playbackRate) * 1000;
   console.log(`[AutoPause] SCHEDULED: endTime=${endTime.toFixed(3)}, currentTime=${currentTime.toFixed(3)}, delay=${delay.toFixed(0)}ms`);
 
-  _autoPauseTimeout = setTimeout(() => {
+  const pauseTarget = pauseAt;
+  _autoPauseTimeout = setTimeout(function autoPauseCheck() {
     _autoPauseTimeout = null;
     if (!autoPauseEnabled) return;
     const v = document.querySelector('video') as HTMLVideoElement | null;
     if (v && !v.paused) {
-      v.pause();
-      console.log(`[AutoPause] PAUSED at ${v.currentTime.toFixed(3)}`);
+      if (v.currentTime >= pauseTarget) {
+        v.pause();
+        console.log(`[AutoPause] PAUSED at ${v.currentTime.toFixed(3)}`);
+      } else {
+        // Timer fired early (seek-to-play startup delay causes video position
+        // to lag behind wall-clock timer). Re-schedule for remaining time.
+        const rem = pauseTarget - v.currentTime;
+        const reDelay = (rem / v.playbackRate) * 1000;
+        console.log(`[AutoPause] RE-SCHEDULED: pos=${v.currentTime.toFixed(3)}, target=${pauseTarget.toFixed(3)}, delay=${reDelay.toFixed(0)}ms`);
+        _autoPauseTimeout = setTimeout(autoPauseCheck, reDelay);
+      }
     }
   }, delay);
 }
@@ -456,10 +477,13 @@ function scheduleAutoPause() {
  * Clear any pending auto-pause timeout.
  * Called from: video pause event, auto-pause toggle OFF, start of scheduleAutoPause.
  */
-function clearAutoPause() {
+function clearAutoPause(resetRetry = true) {
   if (_autoPauseTimeout !== null) {
     clearTimeout(_autoPauseTimeout);
     _autoPauseTimeout = null;
+  }
+  if (resetRetry) {
+    _autoPauseLookupRetryCount = 0;
   }
 }
 
@@ -472,6 +496,7 @@ async function loadAutoPausePreference() {
     if (result && typeof result.autoPauseEnabled === 'boolean') {
       autoPauseEnabled = result.autoPauseEnabled;
       console.log("YleDualSubExtension: Loaded auto-pause preference:", autoPauseEnabled);
+      updateAutoPauseSwitchUI();
     }
   } catch (error) {
     console.warn("YleDualSubExtension: Error loading auto-pause preference:", error);
@@ -482,14 +507,49 @@ async function loadAutoPausePreference() {
  * Update auto-pause switch UI to match current state
  */
 function updateAutoPauseSwitchUI() {
-  const autoPauseSwitch = document.getElementById('auto-pause-switch') as HTMLInputElement | null;
-  if (autoPauseSwitch) {
-    autoPauseSwitch.checked = autoPauseEnabled;
+  if (typeof ControlIntegration !== 'undefined') {
+    ControlIntegration.updateState({ autoPauseEnabled });
+  }
+
+  const autoPauseCheckbox = document.getElementById('dsc-auto-pause-checkbox') as HTMLInputElement | null;
+  if (autoPauseCheckbox) {
+    autoPauseCheckbox.checked = autoPauseEnabled;
+  }
+  const autoPauseToggle = document.getElementById('dsc-auto-pause-toggle') as HTMLElement | null;
+  if (autoPauseToggle) {
+    autoPauseToggle.classList.toggle('active', autoPauseEnabled);
   }
 }
 
-// Load auto-pause preference on startup
-loadAutoPausePreference();
+let _settingsBootstrapPromise: Promise<void> | null = null;
+
+function startSettingsBootstrap() {
+  if (!_settingsBootstrapPromise) {
+    _settingsBootstrapPromise = Promise.all([
+      loadDualSubPreference(),
+      loadAutoPausePreference(),
+      loadExtensionEnabledState(),
+      loadPlaybackSpeedPreference(),
+    ]).then(() => {
+      console.info('DualSubExtension: Settings bootstrap complete');
+    }).catch((error) => {
+      console.warn('DualSubExtension: Settings bootstrap failed:', error);
+    });
+  }
+
+  return _settingsBootstrapPromise;
+}
+
+/**
+ * Wait until settings/state bootstrap is complete.
+ * Used by contentscript.ts to avoid init races with stale defaults.
+ */
+function waitForSettingsBootstrap() {
+  return startSettingsBootstrap();
+}
+
+// Load core settings on startup
+startSettingsBootstrap();
 
 // Listen for user setting changes for provider/key selection in Options page
 chrome.storage.onChanged.addListener(async (changes, namespace) => {

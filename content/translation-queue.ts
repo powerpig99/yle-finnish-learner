@@ -112,6 +112,18 @@ const translationQueue = new TranslationQueue();
 let isBatchTranslating = false;
 let batchTranslationProgress = { current: 0, total: 0 };
 
+function normalizeSubtitleTextForKey(text: string) {
+  return text.replace(/\s+/g, " ").trim().toLowerCase();
+}
+
+function buildTimestampKey(startTime: number, text: string) {
+  return `${startTime.toFixed(3)}|${normalizeSubtitleTextForKey(text)}`;
+}
+
+function buildFullSubtitleKey(startTime: number, endTime: number, text: string) {
+  return `${startTime.toFixed(3)}|${endTime.toFixed(3)}|${normalizeSubtitleTextForKey(text)}`;
+}
+
 /**
  * Handle batch translation of all subtitles with context
  * @param {Array<{text: string, startTime: number, endTime: number}>} subtitles - All subtitles with timing
@@ -129,16 +141,25 @@ async function handleBatchTranslation(subtitles: Array<{ text: string; startTime
 
   // Pre-populate ALL subtitle timestamps for skip feature FIRST (before any early returns)
   // Also accumulate full subtitles for repeat feature
+  const existingTimestampKeys = new Set(
+    subtitleTimestamps.map(ts => buildTimestampKey(ts.time, ts.text))
+  );
+  const existingFullSubtitleKeys = new Set(
+    fullSubtitles.map(sub => buildFullSubtitleKey(sub.startTime, sub.endTime, sub.text))
+  );
+
   for (const sub of subtitles) {
     if (sub.startTime !== undefined) {
-      const existingTimestamp = subtitleTimestamps.find(ts => Math.abs(ts.time - sub.startTime) < 0.5);
-      if (!existingTimestamp) {
+      const timestampKey = buildTimestampKey(sub.startTime, sub.text);
+      if (!existingTimestampKeys.has(timestampKey)) {
+        existingTimestampKeys.add(timestampKey);
         subtitleTimestamps.push({ time: sub.startTime, text: sub.text });
       }
       // Accumulate full subtitle data for repeat feature (with startTime and endTime)
       if (sub.endTime !== undefined) {
-        const existingFullSub = fullSubtitles.find(fs => Math.abs(fs.startTime - sub.startTime) < 0.5);
-        if (!existingFullSub) {
+        const fullSubtitleKey = buildFullSubtitleKey(sub.startTime, sub.endTime, sub.text);
+        if (!existingFullSubtitleKeys.has(fullSubtitleKey)) {
+          existingFullSubtitleKeys.add(fullSubtitleKey);
           fullSubtitles.push({ startTime: sub.startTime, endTime: sub.endTime, text: sub.text });
         }
       }
@@ -209,17 +230,6 @@ async function handleBatchTranslation(subtitles: Array<{ text: string; startTime
           const sharedTranslationMapValue = translatedText.trim().replace(/\n/g, ' ');
 
           sharedTranslationMap.set(sharedTranslationMapKey, sharedTranslationMapValue);
-
-          // Also populate subtitle timestamps for skip feature
-          const subtitleData = chunk[i];
-          if (subtitleData && subtitleData.startTime !== undefined) {
-            const existingTimestamp = subtitleTimestamps.find(
-              ts => Math.abs(ts.time - subtitleData.startTime) < 0.5
-            );
-            if (!existingTimestamp) {
-              subtitleTimestamps.push({ time: subtitleData.startTime, text: rawSubtitleFinnishText });
-            }
-          }
 
           if (currentMovieName) {
             toCacheSubtitleRecords.push({
