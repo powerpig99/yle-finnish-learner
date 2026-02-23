@@ -369,6 +369,33 @@ function setCurrentSubtitleEndTime(endTime: number | null) {
   }
 }
 
+function getActiveCueEndTime(video: HTMLVideoElement) {
+  let bestMatch: { startTime: number; endTime: number } | null = null;
+
+  for (const track of Array.from(video.textTracks)) {
+    if (track.mode === 'disabled') continue;
+    const activeCues = track.activeCues;
+    if (!activeCues || activeCues.length === 0) continue;
+
+    for (let i = 0; i < activeCues.length; i++) {
+      const cue = activeCues[i] as TextTrackCue;
+      if (typeof cue.startTime !== 'number' || typeof cue.endTime !== 'number') continue;
+      if (!Number.isFinite(cue.startTime) || !Number.isFinite(cue.endTime)) continue;
+      if (video.currentTime < cue.startTime || video.currentTime >= cue.endTime) continue;
+
+      if (
+        !bestMatch ||
+        cue.startTime > bestMatch.startTime ||
+        (cue.startTime === bestMatch.startTime && cue.endTime > bestMatch.endTime)
+      ) {
+        bestMatch = { startTime: cue.startTime, endTime: cue.endTime };
+      }
+    }
+  }
+
+  return bestMatch ? bestMatch.endTime : null;
+}
+
 function scheduleAutoPauseLookupRetry() {
   if (_autoPauseLookupRetryCount >= AUTO_PAUSE_LOOKUP_RETRY_LIMIT) {
     return;
@@ -418,24 +445,13 @@ function scheduleAutoPause(fromRetry = false) {
   }
 
   if (endTime === null) {
-    // Fallback: look up by currentTime (for seeked/play/ratechange events, or stale endTime)
-    const subtitles = window.fullSubtitles;
-    if (!subtitles || subtitles.length === 0) {
-      scheduleAutoPauseLookupRetry();
-      return;
-    }
-    const currentTime = video.currentTime;
-    for (let i = 0; i < subtitles.length; i++) {
-      const sub = subtitles[i];
-      if (currentTime >= sub.startTime && currentTime < sub.endTime) {
-        endTime = sub.endTime;
-        break;
-      }
-    }
+    // Fallback: read active native text track cues (single source of truth with subtitle rendering).
+    endTime = getActiveCueEndTime(video);
     if (endTime === null) {
       scheduleAutoPauseLookupRetry();
       return;
     }
+    setCurrentSubtitleEndTime(endTime);
   }
 
   _autoPauseLookupRetryCount = 0;

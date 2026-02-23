@@ -64,6 +64,73 @@ function getNativeSubtitlesWrapper() {
     cachedNativeSubtitlesWrapper = findNativeSubtitlesWrapper();
     return cachedNativeSubtitlesWrapper;
 }
+function normalizeSubtitleTextForTiming(text) {
+    return text.replace(/\n/g, " ").replace(/\s+/g, " ").trim().toLowerCase();
+}
+function subtitleTextsLikelyMatch(displayedText, cueText) {
+    const displayed = normalizeSubtitleTextForTiming(displayedText);
+    const cue = normalizeSubtitleTextForTiming(cueText);
+    if (!displayed || !cue)
+        return false;
+    return displayed === cue || displayed.includes(cue) || cue.includes(displayed);
+}
+function pickLaterTimingCandidate(current, candidate) {
+    if (!current)
+        return candidate;
+    if (candidate.startTime > current.startTime)
+        return candidate;
+    if (candidate.startTime === current.startTime && candidate.endTime > current.endTime)
+        return candidate;
+    return current;
+}
+function resolveDisplayedSubtitleEndTimeFromActiveCues(displayedText, videoElement) {
+    let bestTextMatch = null;
+    let bestActiveCue = null;
+    for (const track of Array.from(videoElement.textTracks)) {
+        if (track.mode === "disabled")
+            continue;
+        const activeCues = track.activeCues;
+        if (!activeCues || activeCues.length === 0)
+            continue;
+        for (let i = 0; i < activeCues.length; i++) {
+            const cue = activeCues[i];
+            const cueText = typeof cue.text === "string" ? cue.text : "";
+            if (typeof cue.startTime !== "number" || typeof cue.endTime !== "number")
+                continue;
+            if (!Number.isFinite(cue.startTime) || !Number.isFinite(cue.endTime))
+                continue;
+            bestActiveCue = pickLaterTimingCandidate(bestActiveCue, {
+                startTime: cue.startTime,
+                endTime: cue.endTime
+            });
+            if (subtitleTextsLikelyMatch(displayedText, cueText)) {
+                bestTextMatch = pickLaterTimingCandidate(bestTextMatch, {
+                    startTime: cue.startTime,
+                    endTime: cue.endTime
+                });
+            }
+        }
+    }
+    if (bestTextMatch) {
+        return bestTextMatch.endTime;
+    }
+    if (bestActiveCue) {
+        return bestActiveCue.endTime;
+    }
+    return null;
+}
+function syncAutoPauseTimingFromDisplayedSubtitle(displayedText) {
+    const videoElement = document.querySelector("video");
+    if (!videoElement) {
+        setCurrentSubtitleEndTime(null);
+        return;
+    }
+    const matchedEndTime = resolveDisplayedSubtitleEndTimeFromActiveCues(displayedText, videoElement);
+    setCurrentSubtitleEndTime(matchedEndTime);
+    if (matchedEndTime !== null) {
+        scheduleAutoPause();
+    }
+}
 /**
  * Create another div for displaying translated subtitles,
  * which inherits class name from original subtitles wrapper.
@@ -157,28 +224,8 @@ function addContentToDisplayedSubtitlesWrapper(displayedSubtitlesWrapper, origin
     if (!finnishText || finnishText.length === 0) {
         return;
     }
-    // Set current subtitle endTime for auto-pause.
-    // DOM mutation fires ~20-30ms before VTT startTime, so we use a tolerance
-    // for the time-based lookup HERE (the one place where tolerance is needed).
-    // scheduleAutoPause() then uses this stored endTime directly.
-    const subtitles = window.fullSubtitles;
-    const videoEl = document.querySelector('video');
-    if (subtitles && subtitles.length > 0 && videoEl) {
-        const ct = videoEl.currentTime;
-        let matchedEndTime = null;
-        for (let i = 0; i < subtitles.length; i++) {
-            const sub = subtitles[i];
-            // Tolerance on startTime only: DOM mutation fires slightly before VTT startTime
-            if (ct >= sub.startTime - 0.15 && ct < sub.endTime) {
-                matchedEndTime = sub.endTime;
-                break;
-            }
-        }
-        setCurrentSubtitleEndTime(matchedEndTime);
-    }
-    else {
-        setCurrentSubtitleEndTime(null);
-    }
+    // Keep auto-pause timing sourced from active rendered text-track cues.
+    syncAutoPauseTimingFromDisplayedSubtitle(finnishText);
     // Create Finnish span with clickable words for popup dictionary
     // ALWAYS shown so users can click words to look up translations
     const finnishSpan = createSubtitleSpanWithClickableWords(finnishText, spanClassName);
@@ -229,8 +276,6 @@ function addContentToDisplayedSubtitlesWrapper(displayedSubtitlesWrapper, origin
         targetLanguageSpan.id = spanId;
         displayedSubtitlesWrapper.appendChild(targetLanguageSpan);
     }
-    // Schedule auto-pause at end of current subtitle
-    scheduleAutoPause();
 }
 /**
  * Handle mutation related to subtitles wrapper
