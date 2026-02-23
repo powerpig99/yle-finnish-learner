@@ -45,8 +45,7 @@ yle-language-reactor/
 │   ├── inject.js             # Script injector for YLE
 │   ├── database.js           # IndexedDB word translation cache
 │   ├── utils.js              # Storage utilities
-│   ├── popup.js              # Minimal popup handler
-│   └── types.js              # Type definitions
+│   └── popup.js              # Minimal popup handler
 │
 ├── controls/                 # Control panel modules (plain JS)
 │   ├── control-panel.js      # Main ControlPanel class

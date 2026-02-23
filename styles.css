@@ -600,7 +600,6 @@ div[class*="PlayerUI__UI"].yle-mouse-active #displayed-subtitles-wrapper {
   min-width: 50px;
   height: 22px;
   -webkit-appearance: none;
-  -moz-appearance: none;
   appearance: none;
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='8' viewBox='0 0 8 8'%3E%3Cpath fill='%23fff' d='M0 2l4 4 4-4z'/%3E%3C/svg%3E") !important;
   background-repeat: no-repeat !important;

@@ -11,7 +11,6 @@
     "types": ["chrome"]
   },
   "include": [
-    "types.js",
     "database.js",
     "utils.js",
     "background.ts",
