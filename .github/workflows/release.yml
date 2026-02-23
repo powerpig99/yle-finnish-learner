@@ -26,15 +26,12 @@ jobs:
         with:
           node-version: '22'
           cache: 'npm'
-          cache-dependency-path: extension-options-page/package-lock.json
 
       - name: Install dependencies
-        working-directory: extension-options-page
         run: npm ci
 
-      - name: Build options page
-        working-directory: extension-options-page
-        run: npm run build
+      - name: Build extension
+        run: npm run build:extension
 
       - name: Package extension
         run: |

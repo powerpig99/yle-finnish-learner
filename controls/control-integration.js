@@ -41,9 +41,6 @@ const ControlIntegration = {
     extensionEnabled: true      // Global on/off toggle (user controls everything)
   },
 
-  /** @type {Array<{time: number, text: string}>} */
-  _subtitleTimestamps: [],
-
   /** @type {Array<{startTime: number, endTime: number, text: string}>} */
   _subtitles: [],
 
@@ -187,7 +184,6 @@ const ControlIntegration = {
       this._panel.unmount();
       this._panel = null;
     }
-    this._subtitleTimestamps = [];
     this._subtitles = [];
   },
 
@@ -229,14 +225,6 @@ const ControlIntegration = {
   },
 
   /**
-   * Set subtitle timestamps for navigation
-   * @param {Array<{time: number, text: string}>} timestamps
-   */
-  setSubtitleTimestamps(timestamps) {
-    this._subtitleTimestamps = timestamps;
-  },
-
-  /**
    * Set full subtitles with timing for repeat functionality
    * @param {Array<{startTime: number, endTime: number, text: string}>} subtitles
    */
@@ -246,11 +234,6 @@ const ControlIntegration = {
     // The source array (fullSubtitles) gets cleared on navigation, which would
     // also clear _subtitles if we just stored the reference.
     this._subtitles = subtitles.map(sub => ({ ...sub }));
-    // Also update timestamps
-    this._subtitleTimestamps = subtitles.map(sub => ({
-      time: sub.startTime,
-      text: sub.text
-    }));
   },
 
   /**
@@ -550,7 +533,7 @@ const ControlIntegration = {
    * @private
    */
   _handlePrevSubtitle() {
-    ControlActions.skipToPreviousSubtitle(this._subtitleTimestamps);
+    ControlActions.skipToPreviousSubtitle();
 
     // Dispatch event for contentscript.js
     const event = new CustomEvent('dscPrevSubtitle', { detail: {} });
@@ -562,7 +545,7 @@ const ControlIntegration = {
    * @private
    */
   _handleNextSubtitle() {
-    ControlActions.skipToNextSubtitle(this._subtitleTimestamps);
+    ControlActions.skipToNextSubtitle();
 
     // Dispatch event for contentscript.js
     const event = new CustomEvent('dscNextSubtitle', { detail: {} });

@@ -88,7 +88,6 @@ Chrome extensions do NOT auto-reload. After code changes:
 ## Chrome Web Store Submission (Added: 2026-01-22)
 
 **Assets location:** `store-assets/`
-- `icon-128.png` - 128x128 extension icon
 - `screenshot-dual-subs-1.png` - 1280x800
 - `screenshot-dual-subs-2.png` - 1280x800
 - `screenshot-settings.png` - 1280x800 (padded to maintain aspect ratio)

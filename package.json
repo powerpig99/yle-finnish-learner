@@ -1,10 +1,7 @@
 {
   "devDependencies": {
-    "@eslint/js": "9.39.2",
     "@types/chrome": "0.1.31",
-    "eslint": "9.39.2",
     "fake-indexeddb": "6.2.5",
-    "globals": "16.5.0",
     "jest": "30.2.0",
     "typescript": "5.9.3"
   },
@@ -14,14 +11,9 @@
     "test:coverage": "jest --coverage",
     "type-check": "tsc --noEmit",
     "type-check:watch": "tsc --noEmit --watch",
-    "build:extension": "tsc -p tsconfig.build.background.json && tsc -p tsconfig.build.content.json",
-    "build:extension:watch": "tsc -p tsconfig.build.content.json --watch",
-    "lint": "eslint .",
-    "lint:fix": "eslint . --fix",
-    "validate": "npm run type-check && npm run lint && npm test",
-    "docs:start": "cd landing-page && npm start",
-    "docs:build": "cd landing-page && npm run build",
-    "docs:serve": "cd landing-page && npm run serve"
+    "build:extension": "tsc -p tsconfig.build.json",
+    "build:extension:watch": "tsc -p tsconfig.build.json --watch",
+    "validate": "npm run type-check && npm test"
   },
   "jest": {
     "testEnvironment": "node",

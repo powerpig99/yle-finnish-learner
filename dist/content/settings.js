@@ -510,11 +510,7 @@ chrome.storage.onChanged.addListener(async (changes, namespace) => {
         _handleDualSubBehaviourBasedOnSelectedToken(hasValidProvider);
     }
     if (namespace === 'sync' && changes.targetLanguage) {
-        if (changes.targetLanguage.newValue && typeof changes.targetLanguage.newValue === 'string') {
-            alert(`Your target language has changed to ${changes.targetLanguage.newValue}. ` +
-                `We need to reload the page for the change to work.`);
-            location.reload();
-        }
+        // Handled in the cross-tab sync listener below.
     }
     // Handle subtitle font size changes
     if (namespace === 'sync' && changes.subtitleFontSize) {
@@ -542,11 +538,20 @@ chrome.storage.onChanged.addListener((changes, areaName) => {
         }
     }
     if (changes.targetLanguage) {
-        targetLanguage = changes.targetLanguage.newValue || 'EN-US';
-        console.info('DualSubExtension: Target language changed via storage:', targetLanguage);
+        const newTargetLanguage = changes.targetLanguage.newValue || 'EN-US';
+        const previousTargetLanguage = targetLanguage;
+        targetLanguage = newTargetLanguage;
+        window._targetLanguage = newTargetLanguage;
+        console.info('DualSubExtension: Target language changed via storage:', newTargetLanguage);
         // Update control integration and recalculate activation
         if (typeof ControlIntegration !== 'undefined') {
-            ControlIntegration.setTargetLanguage(targetLanguage);
+            ControlIntegration.setTargetLanguage(newTargetLanguage);
+        }
+        // Refresh translation state in-page without forcing a YLE player reload.
+        if (previousTargetLanguage !== newTargetLanguage) {
+            document.dispatchEvent(new CustomEvent('dscTargetLanguageChanged', {
+                detail: { targetLanguage: newTargetLanguage }
+            }));
         }
     }
 });

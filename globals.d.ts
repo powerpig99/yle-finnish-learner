@@ -155,7 +155,6 @@ declare const ControlIntegration: {
     getState: () => any;
     updateState: (state: any) => void;
     setSubtitles: (subtitles: any[]) => void;
-    setSubtitleTimestamps: (timestamps: any[]) => void;
     setTargetLanguage: (language: string) => void;
     setSourceLanguage: (language: string | null, options?: any) => void;
     setCaptionsEnabled: (enabled: boolean) => void;

@@ -375,12 +375,6 @@ document.addEventListener("sendBatchTranslationEvent", (e) => {
 // Moved: UI event listeners to content/ui-events.ts
 // Moved: runtime message handlers to content/runtime-messages.ts
 // Moved: settings change listeners to content/settings.ts
-// Update ControlIntegration with subtitle timestamps when they change
-function updateControlIntegrationSubtitles() {
-    if (typeof ControlIntegration !== 'undefined' && ControlIntegration.isInitialized()) {
-        ControlIntegration.setSubtitleTimestamps(subtitleTimestamps);
-    }
-}
 // ==================================
 // END UNIFIED CONTROL PANEL SECTION
 // ==================================

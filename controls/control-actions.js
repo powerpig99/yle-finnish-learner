@@ -14,6 +14,94 @@ const ControlActions = {
   },
 
   /**
+   * Skip-debug toggle.
+   * Enable with:
+   *   window.__DSC_DEBUG_SKIP = true
+   * or
+   *   localStorage.setItem('dsc.debug.skip', '1')
+   * @returns {boolean}
+   */
+  isSkipDebugEnabled() {
+    try {
+      if (typeof window === 'undefined') return false;
+      return window.__DSC_DEBUG_SKIP === true || window.localStorage?.getItem('dsc.debug.skip') === '1';
+    } catch (_error) {
+      return false;
+    }
+  },
+
+  /**
+   * Emit debug logs for subtitle navigation when enabled.
+   * @param {string} message
+   * @param {Object} data
+   */
+  logSkipDebug(message, data = {}) {
+    if (!this.isSkipDebugEnabled()) return;
+    console.info(`[DualSubExtension][skip-debug] ${message}`, data);
+  },
+
+  /**
+   * Build sorted, de-duplicated subtitle start times for navigation.
+   * Uses active text-track cues only (single source of truth).
+   * @param {HTMLVideoElement} video
+   * @returns {number[]}
+   */
+  getNavigationStartTimes(video) {
+    const EPSILON = 0.001;
+    const cueTimes = [];
+    const trackSummaries = [];
+
+    if (video && video.textTracks && video.textTracks.length > 0) {
+      for (const track of Array.from(video.textTracks)) {
+        if (!track) continue;
+        const cues = track.cues;
+        trackSummaries.push({
+          language: track.language || '',
+          label: track.label || '',
+          mode: track.mode,
+          cuesCount: cues ? cues.length : 0
+        });
+        if (track.mode === 'disabled') continue;
+        if (!cues || cues.length === 0) continue;
+
+        for (let i = 0; i < cues.length; i++) {
+          const cue = cues[i];
+          if (typeof cue.startTime === 'number' && Number.isFinite(cue.startTime)) {
+            cueTimes.push(cue.startTime);
+          }
+        }
+      }
+    }
+
+    if (cueTimes.length === 0) {
+      this.logSkipDebug('no cues available for navigation', {
+        currentTime: typeof video?.currentTime === 'number' ? video.currentTime : null,
+        tracks: trackSummaries
+      });
+      return [];
+    }
+
+    cueTimes.sort((a, b) => a - b);
+
+    const uniqueTimes = [cueTimes[0]];
+    for (let i = 1; i < cueTimes.length; i++) {
+      const time = cueTimes[i];
+      if (time > uniqueTimes[uniqueTimes.length - 1] + EPSILON) {
+        uniqueTimes.push(time);
+      }
+    }
+
+    this.logSkipDebug('built navigation cue timeline', {
+      currentTime: typeof video?.currentTime === 'number' ? video.currentTime : null,
+      rawCueStartCount: cueTimes.length,
+      uniqueCueStartCount: uniqueTimes.length,
+      tracks: trackSummaries
+    });
+
+    return uniqueTimes;
+  },
+
+  /**
    * Toggle play/pause on the video
    * @returns {boolean} - New paused state
    */
@@ -32,33 +120,45 @@ const ControlActions = {
 
   /**
    * Skip to the previous subtitle
-   * @param {Array<{time: number, text: string}>} subtitleTimestamps - Array of subtitle timestamps
    */
-  skipToPreviousSubtitle(subtitleTimestamps) {
+  skipToPreviousSubtitle() {
     const video = this.getVideoElement();
     if (!video) return;
 
     const currentTime = video.currentTime;
+    const startTimes = this.getNavigationStartTimes(video);
+    const EPSILON = 0.001;
 
-    // Find the current subtitle index (last one that started at or before currentTime)
+    if (startTimes.length === 0) {
+      this.logSkipDebug('prev no-op (no startTimes)', { currentTime });
+      return;
+    }
+
+    // Find current subtitle index (last one that started at or before currentTime)
     let currentSubIndex = -1;
-    for (let i = subtitleTimestamps.length - 1; i >= 0; i--) {
-      if (subtitleTimestamps[i].time <= currentTime) {
+    for (let i = startTimes.length - 1; i >= 0; i--) {
+      if (startTimes[i] <= currentTime + EPSILON) {
         currentSubIndex = i;
         break;
       }
     }
 
     // Always go to the PREVIOUS subtitle (one before current)
+    let targetTime = null;
     if (currentSubIndex > 0) {
-      video.currentTime = subtitleTimestamps[currentSubIndex - 1].time;
+      targetTime = startTimes[currentSubIndex - 1];
+      video.currentTime = targetTime;
     } else if (currentSubIndex === 0) {
       // Already at first subtitle — seek to its start
-      video.currentTime = subtitleTimestamps[0].time;
-    } else {
-      // No subtitle found, skip back 5 seconds as fallback
-      video.currentTime = Math.max(0, currentTime - 5);
+      targetTime = startTimes[0];
+      video.currentTime = targetTime;
     }
+
+    this.logSkipDebug('prev navigation decision', {
+      currentTime,
+      currentSubIndex,
+      targetTime
+    });
 
     // Resume playback if paused (e.g., after auto-pause)
     if (video.paused) {
@@ -68,23 +168,45 @@ const ControlActions = {
 
   /**
    * Skip to the next subtitle
-   * @param {Array<{time: number, text: string}>} subtitleTimestamps - Array of subtitle timestamps
    */
-  skipToNextSubtitle(subtitleTimestamps) {
+  skipToNextSubtitle() {
     const video = this.getVideoElement();
     if (!video) return;
 
     const currentTime = video.currentTime;
+    const startTimes = this.getNavigationStartTimes(video);
+    const EPSILON = 0.001;
 
-    // Find the next subtitle timestamp after current time
-    const nextSubtitle = subtitleTimestamps.find(entry => entry.time > currentTime + 0.5);
-
-    if (nextSubtitle) {
-      video.currentTime = nextSubtitle.time;
-    } else {
-      // No next subtitle found, skip forward 5 seconds as fallback
-      video.currentTime = currentTime + 5;
+    if (startTimes.length === 0) {
+      this.logSkipDebug('next no-op (no startTimes)', { currentTime });
+      return;
     }
+
+    // Determine current subtitle by index first, then advance exactly one subtitle.
+    let currentSubIndex = -1;
+    for (let i = startTimes.length - 1; i >= 0; i--) {
+      if (startTimes[i] <= currentTime + EPSILON) {
+        currentSubIndex = i;
+        break;
+      }
+    }
+
+    let nextTime = null;
+    if (currentSubIndex < 0) {
+      nextTime = startTimes[0];
+    } else if (currentSubIndex < startTimes.length - 1) {
+      nextTime = startTimes[currentSubIndex + 1];
+    }
+
+    if (nextTime !== null) {
+      video.currentTime = nextTime;
+    }
+
+    this.logSkipDebug('next navigation decision', {
+      currentTime,
+      currentSubIndex,
+      targetTime: nextTime
+    });
 
     // Resume playback if paused (e.g., after auto-pause)
     if (video.paused) {

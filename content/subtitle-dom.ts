@@ -386,9 +386,11 @@ function handleSubtitlesWrapperMutation(mutation: MutationRecord) {
       const subtitleText = Array.from(finnishTextElements).map(el => el.textContent || '').join(' ').trim();
       if (subtitleText) {
         const currentTime = videoElement.currentTime;
-        // Only add if this is a new timestamp (not already recorded within 0.5s)
+        // Only add if this is a new subtitle moment.
+        // Keep threshold tight so short back-to-back subtitles are not collapsed.
         const lastEntry = subtitleTimestamps[subtitleTimestamps.length - 1];
-        if (!lastEntry || Math.abs(lastEntry.time - currentTime) > 0.5) {
+        const MIN_TIME_DELTA = 0.05;
+        if (!lastEntry || subtitleText !== lastEntry.text || Math.abs(lastEntry.time - currentTime) > MIN_TIME_DELTA) {
           subtitleTimestamps.push({ time: currentTime, text: subtitleText });
           // Keep array sorted and limit size to prevent memory issues
           subtitleTimestamps.sort((a, b) => a.time - b.time);

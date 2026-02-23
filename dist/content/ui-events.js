@@ -239,6 +239,30 @@ document.addEventListener('dscSourceLangChange', (e) => {
     sharedTranslationMap.clear();
     sharedTranslationErrorMap.clear();
 });
+// Handle target language changes without reloading the YLE page.
+document.addEventListener('dscTargetLanguageChanged', (e) => {
+    // Drop in-memory translations from previous target language.
+    sharedTranslationMap.clear();
+    sharedTranslationErrorMap.clear();
+    // Drop pending queue items from the previous language context.
+    if (translationQueue && Array.isArray(translationQueue.queue)) {
+        translationQueue.queue.length = 0;
+    }
+    const originalSubtitlesWrapper = getOriginalSubtitlesWrapper();
+    const displayedSubtitlesWrapper = document.getElementById('displayed-subtitles-wrapper');
+    if (!originalSubtitlesWrapper || !displayedSubtitlesWrapper) {
+        return;
+    }
+    // Re-render current subtitle immediately, then let queue fetch new-language translations.
+    displayedSubtitlesWrapper.innerHTML = '';
+    const originalSubtitleElements = getSubtitleTextElements(originalSubtitlesWrapper);
+    if (originalSubtitleElements.length > 0) {
+        addContentToDisplayedSubtitlesWrapper(displayedSubtitlesWrapper, originalSubtitleElements);
+        translationQueue.processQueue().catch((error) => {
+            console.error('DualSubExtension: Failed to refresh translations after target language change:', error);
+        });
+    }
+});
 // Handle extension toggle from control panel
 // Simplified: no auto-sync, user controls everything
 document.addEventListener('dscExtensionToggle', (e) => {

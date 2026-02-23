@@ -124,6 +124,11 @@ npm run build:extension
 # Options page requires no build step (vanilla HTML/CSS/JS)
 ```
 
+### Engineering Principle
+
+- Ultimate simplicity: one authoritative trigger, one deterministic path, no symptom-level fallbacks.
+- See: `docs/principles/ultimate-simplicity.md`
+
 ### Testing
 
 Load the extension in developer mode and test on YLE Areena.

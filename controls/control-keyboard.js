@@ -10,18 +10,20 @@ class ControlKeyboard {
    * @param {Object} options
    * @param {Object} options.callbacks - Callback functions for each action
    */
-  constructor(options) {
+  constructor(options = {}) {
     this.callbacks = options.callbacks || {};
-    this.config = {
-      useCapture: false,
+    this.config = Object.assign({
+      useCapture: true,
       interceptSpace: false, // Let YLE handle space
       interceptBrackets: true,
       enabled: true
-    };
+    }, options.config || {});
 
     this._boundKeyDown = this._handleKeyDown.bind(this);
     this._boundKeyUp = this._handleKeyUp.bind(this);
+    this._boundWindowBlur = this._handleWindowBlur.bind(this);
     this._attached = false;
+    this._pressedKeys = new Set();
 
     // Default key bindings
     this.keyBindings = {
@@ -47,8 +49,10 @@ class ControlKeyboard {
   attach() {
     if (this._attached) return;
 
-    document.addEventListener('keydown', this._boundKeyDown, false);
-    document.addEventListener('keyup', this._boundKeyUp, false);
+    const useCapture = !!this.config.useCapture;
+    window.addEventListener('keydown', this._boundKeyDown, useCapture);
+    window.addEventListener('keyup', this._boundKeyUp, useCapture);
+    window.addEventListener('blur', this._boundWindowBlur);
 
     this._attached = true;
     console.info('DualSubExtension: Keyboard handler attached for YLE');
@@ -60,10 +64,13 @@ class ControlKeyboard {
   detach() {
     if (!this._attached) return;
 
-    document.removeEventListener('keydown', this._boundKeyDown, false);
-    document.removeEventListener('keyup', this._boundKeyUp, false);
+    const useCapture = !!this.config.useCapture;
+    window.removeEventListener('keydown', this._boundKeyDown, useCapture);
+    window.removeEventListener('keyup', this._boundKeyUp, useCapture);
+    window.removeEventListener('blur', this._boundWindowBlur);
 
     this._attached = false;
+    this._pressedKeys.clear();
     console.info('DualSubExtension: Keyboard handler detached');
   }
 
@@ -73,6 +80,9 @@ class ControlKeyboard {
    */
   setEnabled(enabled) {
     this.config.enabled = enabled;
+    if (!enabled) {
+      this._pressedKeys.clear();
+    }
   }
 
   /**
@@ -89,8 +99,19 @@ class ControlKeyboard {
    * @returns {boolean}
    */
   _isInputElement(event) {
-    const tagName = event.target.tagName;
-    return tagName === 'INPUT' || tagName === 'TEXTAREA' || tagName === 'SELECT';
+    const target = event.target;
+    if (!(target instanceof Element)) return false;
+
+    const tagName = target.tagName;
+    if (tagName === 'INPUT' || tagName === 'TEXTAREA' || tagName === 'SELECT') {
+      return true;
+    }
+
+    if (target.isContentEditable) {
+      return true;
+    }
+
+    return target.closest('[contenteditable="true"]') !== null;
   }
 
   /**
@@ -116,11 +137,22 @@ class ControlKeyboard {
   _handleKeyDown(event) {
     if (!this.config.enabled) return;
     if (this._isInputElement(event)) return;
+    if (event.ctrlKey || event.metaKey || event.altKey) return;
 
     const key = event.key;
+    const allowsRepeat = key === '[' || key === ']';
 
     // Check if this is one of our hotkeys
     if (!this._shouldHandleKey(key)) return;
+
+    // Ignore key-repeat for one-shot actions (not speed brackets).
+    if (event.repeat && !allowsRepeat) return;
+
+    // Guard against duplicate keydown firing while a key is held.
+    if (!allowsRepeat && this._pressedKeys.has(key)) return;
+    if (!allowsRepeat) {
+      this._pressedKeys.add(key);
+    }
 
     // Prevent default and stop propagation for our keys
     event.preventDefault();
@@ -140,12 +172,20 @@ class ControlKeyboard {
     if (this._isInputElement(event)) return;
 
     const key = event.key;
+    this._pressedKeys.delete(key);
 
     if (!this._shouldHandleKey(key)) return;
 
     event.preventDefault();
     event.stopPropagation();
     event.stopImmediatePropagation();
+  }
+
+  /**
+   * Clear pressed-key guards when window loses focus.
+   */
+  _handleWindowBlur() {
+    this._pressedKeys.clear();
   }
 
   /**
@@ -220,7 +260,7 @@ class ControlKeyboard {
    */
   static getDefaultConfig() {
     return {
-      useCapture: false,
+      useCapture: true,
       interceptSpace: false, // Let YLE handle space
       interceptBrackets: true
     };
