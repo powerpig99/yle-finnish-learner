@@ -309,18 +309,12 @@ document.addEventListener('dscExtensionToggle', (e) => {
 // Handle source language change from control integration
 // Simplified: no auto-sync, just update detectedSourceLanguage
 document.addEventListener('dscSourceLanguageChanged', (e) => {
-    const { sourceLanguage, targetLanguage } = e.detail;
+    const { sourceLanguage } = e.detail;
     // Only update detectedSourceLanguage if new value is not null
     if (sourceLanguage !== null) {
         detectedSourceLanguage = sourceLanguage;
     }
-    console.info('DualSubExtension: Source language changed:', sourceLanguage, 'Target:', targetLanguage);
-});
-// Handle captions state change (CC button toggle)
-// Simplified: no auto-sync, just log the change
-document.addEventListener('dscCaptionsStateChanged', (e) => {
-    const { captionsEnabled, extensionEnabled: newExtensionEnabled, dualSubEnabled: newDualSubEnabled } = e.detail;
-    console.info('DualSubExtension: Captions state changed:', captionsEnabled, 'Extension:', newExtensionEnabled, 'DualSub:', newDualSubEnabled);
+    console.info('DualSubExtension: Source language changed:', sourceLanguage);
 });
 // Listen for source language detection from YLE adapter
 document.addEventListener('yleSourceLanguageDetected', (e) => {

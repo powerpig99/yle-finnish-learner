@@ -229,6 +229,19 @@ async function saveApiKey(providerId, apiKey) {
   }
 }
 
+async function clearCacheAndRefresh(action) {
+  try {
+    const response = await chrome.runtime.sendMessage({ action });
+    if (response && response.success) {
+      await refreshCacheCounts();
+    } else {
+      alert(`Failed to clear: ${response && response.error ? response.error : 'Unknown error'}`);
+    }
+  } catch (error) {
+    alert(`Error: ${error.message}`);
+  }
+}
+
 function attachEventListeners() {
   dom.providerList.addEventListener('change', async (event) => {
     const target = event.target;
@@ -307,30 +320,12 @@ function attachEventListeners() {
       .catch((error) => console.error('Failed to save subtitle font size:', error));
   });
 
-  dom.clearWordCacheButton.addEventListener('click', async () => {
-    try {
-      const response = await chrome.runtime.sendMessage({ action: 'clearWordCache' });
-      if (response && response.success) {
-        await refreshCacheCounts();
-      } else {
-        alert(`Failed to clear: ${response && response.error ? response.error : 'Unknown error'}`);
-      }
-    } catch (error) {
-      alert(`Error: ${error.message}`);
-    }
+  dom.clearWordCacheButton.addEventListener('click', () => {
+    clearCacheAndRefresh('clearWordCache');
   });
 
-  dom.clearSubtitleCacheButton.addEventListener('click', async () => {
-    try {
-      const response = await chrome.runtime.sendMessage({ action: 'clearSubtitleCaches' });
-      if (response && response.success) {
-        await refreshCacheCounts();
-      } else {
-        alert(`Failed to clear: ${response && response.error ? response.error : 'Unknown error'}`);
-      }
-    } catch (error) {
-      alert(`Error: ${error.message}`);
-    }
+  dom.clearSubtitleCacheButton.addEventListener('click', () => {
+    clearCacheAndRefresh('clearSubtitleCaches');
   });
 }
 

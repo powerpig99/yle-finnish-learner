@@ -1051,7 +1051,7 @@ function collectSubtitlesFromVttText(vttText) {
     return subtitles;
 }
 
-function dispatchBatchTranslation(subtitles, source = '') {
+function dispatchBatchTranslation(subtitles) {
     if (subtitles.length === 0) {
         return;
     }
@@ -1067,8 +1067,7 @@ function dispatchBatchTranslation(subtitles, source = '') {
     });
     document.dispatchEvent(batchEvent);
 
-    const sourcePrefix = source ? `[${source}] ` : '';
-    console.info(`YleDualSubExtension: ${sourcePrefix}Sent batch of ${subtitles.length} subtitles for translation (lang: ${LanguageDetector._detected || 'unknown'})`);
+    console.info(`YleDualSubExtension: Sent batch of ${subtitles.length} subtitles for translation (lang: ${LanguageDetector._detected || 'unknown'})`);
 }
 
 (function () {
@@ -1131,7 +1130,7 @@ function dispatchBatchTranslation(subtitles, source = '') {
                 const clonedResponse = response.clone();
                 const text = await clonedResponse.text();
                 const allSubtitles = collectSubtitlesFromVttText(text);
-                dispatchBatchTranslation(allSubtitles, 'fetch');
+                dispatchBatchTranslation(allSubtitles);
             } catch (e) {
                 console.error("YleDualSubExtension: [fetch] Failed to parse VTT file:", e);
             }
