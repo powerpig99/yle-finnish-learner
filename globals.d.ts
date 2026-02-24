@@ -44,7 +44,6 @@ interface Document {
 
 interface Window {
     _targetLanguage?: string;
-    fullSubtitles?: any[];
     clearWordCache?: () => Promise<void>;
 }
 
@@ -52,7 +51,6 @@ interface Window {
 declare function importScripts(...urls: string[]): void;
 
 // Utility functions from utils.js
-declare function loadSelectedTokenFromChromeStorageSync(): Promise<{key: string, isPro: boolean} | null>;
 declare function loadTargetLanguageFromChromeStorageSync(): Promise<string>;
 declare function isSameLanguage(lang1: string, lang2: string): boolean;
 declare function getWiktionaryLang(targetLang: string): string;

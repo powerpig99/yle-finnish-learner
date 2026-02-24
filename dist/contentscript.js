@@ -5,7 +5,7 @@ console.info('DualSubExtension: YLE Areena extension loaded');
 // ==================================
 // SECTION 1: STATE & INITIALIZATION
 // ==================================
-/* global loadTargetLanguageFromChromeStorageSync, loadSelectedTokenFromChromeStorageSync */
+/* global loadTargetLanguageFromChromeStorageSync */
 /* global openDatabase, saveSubtitlesBatch, loadSubtitlesByMovieName, upsertMovieMetadata, cleanupOldMovieData */
 /* global getWordTranslation, saveWordTranslation, cleanupOldWordTranslations, clearAllWordTranslations */
 /** @type {Map<string, string>}
@@ -135,10 +135,8 @@ const subtitleTimestamps = [];
 /** @type {Array<{startTime: number, endTime: number, text: string}>}
  * Array of full subtitle data with start/end times
  * Used for repeat subtitle feature - accumulates like subtitleTimestamps
- * Exported to window for access from control-integration.js fallback
  */
 const fullSubtitles = [];
-window.fullSubtitles = fullSubtitles;
 // Moved: word translation + tooltip logic to content/word-translation.ts
 /**
  * @type {string | null}
