@@ -34,10 +34,6 @@ function toTranslationKey(rawSubtitleFinnishText) {
 let _unifiedPanelInitializing = false;
 async function initializeUnifiedControlPanel() {
     console.log('DualSubExtension: initializeUnifiedControlPanel called');
-    if (typeof ControlIntegration === 'undefined') {
-        console.warn('DualSubExtension: ControlIntegration not available');
-        return;
-    }
     // Check if already initialized OR currently initializing (prevent race condition)
     const isActuallyInitialized = ControlIntegration.isInitialized();
     if (isActuallyInitialized) {
@@ -54,10 +50,7 @@ async function initializeUnifiedControlPanel() {
     console.log('DualSubExtension: Waiting 500ms for player UI to settle...');
     await new Promise(resolve => setTimeout(resolve, 500));
     try {
-        const waitForSettingsReady = window.waitForSettingsBootstrap;
-        if (typeof waitForSettingsReady === 'function') {
-            await waitForSettingsReady();
-        }
+        await window.waitForSettingsBootstrap();
         // Check initial captions state (YLE requires manual captions enable)
         const video = document.querySelector('video');
         const captionsEnabled = video

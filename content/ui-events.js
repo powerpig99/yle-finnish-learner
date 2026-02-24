@@ -180,10 +180,7 @@ document.addEventListener('click', (e) => {
 // UI EVENT LISTENERS
 // ==================================
 function getOriginalSubtitlesWrapper() {
-    if (typeof getNativeSubtitlesWrapper === 'function') {
-        return getNativeSubtitlesWrapper();
-    }
-    return document.querySelector('[data-testid="subtitles-wrapper"]');
+    return getNativeSubtitlesWrapper();
 }
 
 function renderCurrentSubtitleImmediately(originalSubtitlesWrapper) {

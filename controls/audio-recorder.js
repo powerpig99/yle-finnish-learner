@@ -29,7 +29,7 @@ const AudioRecorder = {
    * @returns {Object} - { supported: boolean, reason?: string }
    */
   checkSupport() {
-    if (!window.AudioContext && !window.webkitAudioContext) {
+    if (!window.AudioContext) {
       return { supported: false, reason: 'AudioContext not supported' };
     }
     if (!window.MediaRecorder) {
@@ -75,8 +75,7 @@ const AudioRecorder = {
       if (onStatusChange) onStatusChange('Initializing audio capture...');
 
       // Create audio context
-      const AudioContextClass = window.AudioContext || window.webkitAudioContext;
-      const audioContext = new AudioContextClass();
+      const audioContext = new window.AudioContext();
       this._state.audioContext = audioContext;
 
       // Resume audio context if suspended (required by some browsers)
@@ -172,7 +171,7 @@ const AudioRecorder = {
   async _setupAudioCapture(video, audioContext) {
     // Method 1: Try captureStream first (less intrusive, doesn't alter audio routing)
     try {
-      const captureStreamFn = video.captureStream || video.mozCaptureStream;
+      const captureStreamFn = video.captureStream;
       if (captureStreamFn) {
         const stream = captureStreamFn.call(video);
         const audioTracks = stream.getAudioTracks();

@@ -149,8 +149,8 @@ async function showWordTooltip(word, wordElement, context) {
     activeWordElement = wordElement;
     wordElement.classList.add("active");
     // Create tooltip with Wiktionary link placeholder
-    // Use target language for Wiktionary subdomain (falls back to 'en' if not supported)
-    const wiktLang = typeof getWiktionaryLang === 'function' ? getWiktionaryLang(targetLanguage) : 'en';
+    // Use target language for Wiktionary subdomain.
+    const wiktLang = getWiktionaryLang(targetLanguage);
     const sourceLangSection = detectedSourceLanguage ? `#${getWordLanguageName(detectedSourceLanguage.toUpperCase())}` : '';
     const wiktionaryUrl = `https://${wiktLang}.wiktionary.org/wiki/${encodeURIComponent(word.toLowerCase())}${sourceLangSection}`;
     const tooltip = document.createElement("div");
@@ -165,7 +165,7 @@ async function showWordTooltip(word, wordElement, context) {
     <a class="word-tooltip__link" href="${wiktionaryUrl}" target="_blank" rel="noopener">View on Wiktionary →</a>
   `;
     // In fullscreen mode, append to the fullscreen element; otherwise append to body
-    const fullscreenElement = document.fullscreenElement || document.webkitFullscreenElement;
+    const fullscreenElement = document.fullscreenElement;
     const tooltipContainer = fullscreenElement || document.body;
     tooltipContainer.appendChild(tooltip);
     activeTooltip = tooltip;
@@ -372,8 +372,8 @@ window.clearWordCache = clearWordCache;
  */
 async function translateWord(word, context) {
     const normalizedWord = word.toLowerCase().trim();
-    // Use target language for Wiktionary subdomain (falls back to 'en' if not supported)
-    const wiktLang = typeof getWiktionaryLang === 'function' ? getWiktionaryLang(targetLanguage) : 'en';
+    // Use target language for Wiktionary subdomain.
+    const wiktLang = getWiktionaryLang(targetLanguage);
     const sourceLangSection = detectedSourceLanguage ? `#${getWordLanguageName(detectedSourceLanguage.toUpperCase())}` : '';
     const wiktionaryUrl = `https://${wiktLang}.wiktionary.org/wiki/${encodeURIComponent(normalizedWord)}${sourceLangSection}`;
     // Check in-memory cache first
@@ -513,8 +513,8 @@ function getWordLanguageName(langCode) {
  */
 async function fetchWiktionaryDefinition(word) {
     // Use target language for Wiktionary API (definitions will be in target language)
-    // Falls back to English if target language not supported
-    const wiktLang = typeof getWiktionaryLang === 'function' ? getWiktionaryLang(targetLanguage) : 'en';
+    // Falls back to English if target language is unsupported.
+    const wiktLang = getWiktionaryLang(targetLanguage);
     const apiUrl = `https://${wiktLang}.wiktionary.org/api/rest_v1/page/definition/${encodeURIComponent(word)}`;
     // Determine source language code for looking up entries
     // Use detectedSourceLanguage if available, otherwise default to 'fi' (Finnish)

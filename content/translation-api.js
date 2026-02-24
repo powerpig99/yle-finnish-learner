@@ -1,26 +1,23 @@
 // ==================================
 // TRANSLATION API
 // ==================================
-/**
- * Fetch batch translation with context from background script
- * @param {Array<string>} texts - Texts to translate
- * @returns {Promise<[true, Array<string>]|[false, string]>}
- */
-async function fetchBatchTranslation(texts) {
-    const MAX_RETRIES = 3;
-    const RETRY_DELAY = 1000; // 1 second
-    for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+const TRANSLATION_MAX_RETRIES = 3;
+const TRANSLATION_RETRY_DELAY_MS = 1000;
+
+function isServiceWorkerRecoverableError(errorMsg) {
+    return errorMsg.includes('message channel closed') ||
+        errorMsg.includes('Extension context invalidated') ||
+        errorMsg.includes('Receiving end does not exist');
+}
+
+async function sendTranslationMessageWithRetry(action, data, errorContext) {
+    for (let attempt = 0; attempt < TRANSLATION_MAX_RETRIES; attempt++) {
         try {
-            const response = await safeSendMessage({
-                action: 'fetchBatchTranslation',
-                data: { texts, targetLanguage, isContextual: true }
-            });
+            const response = await safeSendMessage({ action, data });
             if (response === null) {
-                // Extension context invalidated - service worker might have been terminated
-                // Wait and retry as it should restart
-                if (attempt < MAX_RETRIES - 1) {
-                    console.warn(`YleDualSubExtension: Service worker not responding, retrying in ${RETRY_DELAY}ms (attempt ${attempt + 1}/${MAX_RETRIES})`);
-                    await sleep(RETRY_DELAY);
+                if (attempt < TRANSLATION_MAX_RETRIES - 1) {
+                    console.warn(`YleDualSubExtension: Service worker not responding, retrying in ${TRANSLATION_RETRY_DELAY_MS}ms (attempt ${attempt + 1}/${TRANSLATION_MAX_RETRIES})`);
+                    await sleep(TRANSLATION_RETRY_DELAY_MS);
                     continue;
                 }
                 return [false, 'Extension context invalidated'];
@@ -29,20 +26,29 @@ async function fetchBatchTranslation(texts) {
         }
         catch (error) {
             const errorMsg = error.message || String(error);
-            // Check for service worker termination errors - retry these
-            const isServiceWorkerError = errorMsg.includes('message channel closed') ||
-                errorMsg.includes('Extension context invalidated') ||
-                errorMsg.includes('Receiving end does not exist');
-            if (isServiceWorkerError && attempt < MAX_RETRIES - 1) {
-                console.warn(`YleDualSubExtension: Service worker error, retrying in ${RETRY_DELAY}ms (attempt ${attempt + 1}/${MAX_RETRIES}):`, errorMsg);
-                await sleep(RETRY_DELAY);
+            if (isServiceWorkerRecoverableError(errorMsg) && attempt < TRANSLATION_MAX_RETRIES - 1) {
+                console.warn(`YleDualSubExtension: Service worker error, retrying in ${TRANSLATION_RETRY_DELAY_MS}ms (attempt ${attempt + 1}/${TRANSLATION_MAX_RETRIES}):`, errorMsg);
+                await sleep(TRANSLATION_RETRY_DELAY_MS);
                 continue;
             }
-            console.error("YleDualSubExtension: Error sending batch translation request:", error);
+            console.error(`YleDualSubExtension: Error sending ${errorContext}:`, error);
             return [false, errorMsg];
         }
     }
     return [false, 'Translation failed after retries'];
+}
+
+/**
+ * Fetch batch translation with context from background script
+ * @param {Array<string>} texts - Texts to translate
+ * @returns {Promise<[true, Array<string>]|[false, string]>}
+ */
+async function fetchBatchTranslation(texts) {
+    return sendTranslationMessageWithRetry(
+        'fetchBatchTranslation',
+        { texts, targetLanguage, isContextual: true },
+        'batch translation request'
+    );
 }
 /**
  *
@@ -52,42 +58,9 @@ async function fetchBatchTranslation(texts) {
 
  */
 async function fetchTranslation(rawSubtitleFinnishTexts) {
-    const MAX_RETRIES = 3;
-    const RETRY_DELAY = 1000; // 1 second
-    for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
-        try {
-            /**
-             * @type {[true, Array<string>] | [false, string] | null}
-             */
-            const response = await safeSendMessage({
-                action: 'fetchTranslation',
-                data: { rawSubtitleFinnishTexts, targetLanguage }
-            });
-            if (response === null) {
-                // Extension context invalidated - service worker might have been terminated
-                if (attempt < MAX_RETRIES - 1) {
-                    console.warn(`YleDualSubExtension: Service worker not responding, retrying in ${RETRY_DELAY}ms (attempt ${attempt + 1}/${MAX_RETRIES})`);
-                    await sleep(RETRY_DELAY);
-                    continue;
-                }
-                return [false, 'Extension context invalidated'];
-            }
-            return response;
-        }
-        catch (error) {
-            const errorMsg = error.message || String(error);
-            // Check for service worker termination errors - retry these
-            const isServiceWorkerError = errorMsg.includes('message channel closed') ||
-                errorMsg.includes('Extension context invalidated') ||
-                errorMsg.includes('Receiving end does not exist');
-            if (isServiceWorkerError && attempt < MAX_RETRIES - 1) {
-                console.warn(`YleDualSubExtension: Service worker error, retrying in ${RETRY_DELAY}ms (attempt ${attempt + 1}/${MAX_RETRIES}):`, errorMsg);
-                await sleep(RETRY_DELAY);
-                continue;
-            }
-            console.error("YleDualSubExtension: Error sending message to background for translation:", error);
-            return [false, errorMsg];
-        }
-    }
-    return [false, 'Translation failed after retries'];
+    return sendTranslationMessageWithRetry(
+        'fetchTranslation',
+        { rawSubtitleFinnishTexts, targetLanguage },
+        'message to background for translation'
+    );
 }

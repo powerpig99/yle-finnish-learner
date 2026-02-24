@@ -261,8 +261,7 @@ const ScreenRecorder = {
       if (onProgress) onProgress(0, 100, 0, 'extracting');
 
       // Create audio context
-      const AudioContextClass = window.AudioContext || window.webkitAudioContext;
-      const audioContext = new AudioContextClass();
+      const audioContext = new window.AudioContext();
 
       // Decode video blob to audio
       const arrayBuffer = await videoBlob.arrayBuffer();

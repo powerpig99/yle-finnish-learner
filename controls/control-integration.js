@@ -351,12 +351,7 @@ const ControlIntegration = {
     this._userExtensionEnabled = enabled;
     this._state.extensionEnabled = this._userExtensionEnabled && this._captionsEnabled;
 
-    // Save to storage
-    if (typeof saveExtensionEnabledToStorage === 'function') {
-      await saveExtensionEnabledToStorage(enabled);
-    } else {
-      await chrome.storage.sync.set({ extensionEnabled: enabled });
-    }
+    await saveExtensionEnabledToStorage(enabled);
 
     // Update panel UI if mounted
     if (this._panel) {
@@ -409,9 +404,7 @@ const ControlIntegration = {
     // Handle null explicitly - it means "no subtitles available"
     let normalized = null;
     if (langCode !== null && langCode !== undefined) {
-      normalized = typeof normalizeLanguageCode === 'function'
-        ? normalizeLanguageCode(langCode)
-        : langCode?.toLowerCase() || null;
+      normalized = normalizeLanguageCode(langCode);
     }
 
     this._state.sourceLanguage = normalized;
@@ -441,9 +434,7 @@ const ControlIntegration = {
    * @param {string} langCode - Target language code
    */
   setTargetLanguage(langCode) {
-    const normalized = typeof normalizeLanguageCode === 'function'
-      ? normalizeLanguageCode(langCode)
-      : langCode?.toLowerCase() || 'en';
+    const normalized = normalizeLanguageCode(langCode);
 
     this._state.targetLanguage = normalized;
 
@@ -615,7 +606,7 @@ const ControlIntegration = {
 
     // YLE uses DRM protection - use screen recording
     // Check if already recording - if so, stop it (toggle behavior)
-    if (typeof ScreenRecorder !== 'undefined' && ScreenRecorder.isRecording()) {
+    if (ScreenRecorder.isRecording()) {
       console.info('DualSubExtension: Stopping YLE screen recording');
       ScreenRecorder.stopRecording();
       return;
@@ -722,12 +713,6 @@ const ControlIntegration = {
    * @private
    */
   async _handleYLEScreenRecording() {
-    // Check if ScreenRecorder is available
-    if (typeof ScreenRecorder === 'undefined') {
-      AudioDownloadUI.showError('Screen recording feature is not available. Please reload the page.');
-      return;
-    }
-
     const video = ControlActions.getVideoElement();
     if (!video) {
       AudioDownloadUI.showError('No video found on this page');
@@ -1332,7 +1317,7 @@ const ControlIntegration = {
     }
 
     // Check 3: Basic API availability
-    const hasWebAudio = !!(window.AudioContext || window.webkitAudioContext);
+    const hasWebAudio = !!window.AudioContext;
     const hasMediaRecorder = !!window.MediaRecorder;
 
     if (!hasWebAudio || !hasMediaRecorder) {
@@ -1343,8 +1328,7 @@ const ControlIntegration = {
     }
 
     // Check 4: Check if captureStream exists (but don't call it - that can break players)
-    const hasCaptureStream = typeof video.captureStream === 'function' ||
-                             typeof video.mozCaptureStream === 'function';
+    const hasCaptureStream = typeof video.captureStream === 'function';
 
     // If captureStream doesn't exist, we'll rely on createMediaElementSource
     // which should work for most cases
