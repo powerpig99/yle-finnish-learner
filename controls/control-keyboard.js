@@ -55,7 +55,6 @@ class ControlKeyboard {
     window.addEventListener('blur', this._boundWindowBlur);
 
     this._attached = true;
-    console.info('DualSubExtension: Keyboard handler attached for YLE');
   }
 
   /**
@@ -71,7 +70,6 @@ class ControlKeyboard {
 
     this._attached = false;
     this._pressedKeys.clear();
-    console.info('DualSubExtension: Keyboard handler detached');
   }
 
   /**

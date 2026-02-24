@@ -14,32 +14,6 @@ const ControlActions = {
   },
 
   /**
-   * Skip-debug toggle.
-   * Enable with:
-   *   window.__DSC_DEBUG_SKIP = true
-   * or
-   *   localStorage.setItem('dsc.debug.skip', '1')
-   * @returns {boolean}
-   */
-  isSkipDebugEnabled() {
-    try {
-      return window.__DSC_DEBUG_SKIP === true || window.localStorage?.getItem('dsc.debug.skip') === '1';
-    } catch (_error) {
-      return false;
-    }
-  },
-
-  /**
-   * Emit debug logs for subtitle navigation when enabled.
-   * @param {string} message
-   * @param {Object} data
-   */
-  logSkipDebug(message, data = {}) {
-    if (!this.isSkipDebugEnabled()) return;
-    console.info(`[DualSubExtension][skip-debug] ${message}`, data);
-  },
-
-  /**
    * Build sorted, de-duplicated subtitle start times for navigation.
    * Uses active text-track cues only (single source of truth).
    * @param {HTMLVideoElement} video
@@ -48,18 +22,11 @@ const ControlActions = {
   getNavigationStartTimes(video) {
     const EPSILON = 0.001;
     const cueTimes = [];
-    const trackSummaries = [];
 
     if (video && video.textTracks && video.textTracks.length > 0) {
       for (const track of Array.from(video.textTracks)) {
         if (!track) continue;
         const cues = track.cues;
-        trackSummaries.push({
-          language: track.language || '',
-          label: track.label || '',
-          mode: track.mode,
-          cuesCount: cues ? cues.length : 0
-        });
         if (track.mode === 'disabled') continue;
         if (!cues || cues.length === 0) continue;
 
@@ -72,13 +39,7 @@ const ControlActions = {
       }
     }
 
-    if (cueTimes.length === 0) {
-      this.logSkipDebug('no cues available for navigation', {
-        currentTime: typeof video?.currentTime === 'number' ? video.currentTime : null,
-        tracks: trackSummaries
-      });
-      return [];
-    }
+    if (cueTimes.length === 0) return [];
 
     cueTimes.sort((a, b) => a - b);
 
@@ -89,13 +50,6 @@ const ControlActions = {
         uniqueTimes.push(time);
       }
     }
-
-    this.logSkipDebug('built navigation cue timeline', {
-      currentTime: typeof video?.currentTime === 'number' ? video.currentTime : null,
-      rawCueStartCount: cueTimes.length,
-      uniqueCueStartCount: uniqueTimes.length,
-      tracks: trackSummaries
-    });
 
     return uniqueTimes;
   },
@@ -128,10 +82,7 @@ const ControlActions = {
     const startTimes = this.getNavigationStartTimes(video);
     const EPSILON = 0.001;
 
-    if (startTimes.length === 0) {
-      this.logSkipDebug('prev no-op (no startTimes)', { currentTime });
-      return;
-    }
+    if (startTimes.length === 0) return;
 
     // Find current subtitle index (last one that started at or before currentTime)
     let currentSubIndex = -1;
@@ -153,12 +104,6 @@ const ControlActions = {
       video.currentTime = targetTime;
     }
 
-    this.logSkipDebug('prev navigation decision', {
-      currentTime,
-      currentSubIndex,
-      targetTime
-    });
-
     // Resume playback if paused (e.g., after auto-pause)
     if (video.paused) {
       video.play();
@@ -176,10 +121,7 @@ const ControlActions = {
     const startTimes = this.getNavigationStartTimes(video);
     const EPSILON = 0.001;
 
-    if (startTimes.length === 0) {
-      this.logSkipDebug('next no-op (no startTimes)', { currentTime });
-      return;
-    }
+    if (startTimes.length === 0) return;
 
     // Determine current subtitle by index first, then advance exactly one subtitle.
     let currentSubIndex = -1;
@@ -200,12 +142,6 @@ const ControlActions = {
     if (nextTime !== null) {
       video.currentTime = nextTime;
     }
-
-    this.logSkipDebug('next navigation decision', {
-      currentTime,
-      currentSubIndex,
-      targetTime: nextTime
-    });
 
     // Resume playback if paused (e.g., after auto-pause)
     if (video.paused) {
@@ -230,7 +166,6 @@ const ControlActions = {
     }
 
     const currentTime = video.currentTime;
-    console.log(`[Repeat] currentTime=${currentTime.toFixed(3)}, subtitles.length=${subtitles.length}, video.paused=${video.paused}`);
 
     // Find current subtitle (the one we're in or the most recent one)
     let currentSubIndex = -1;
@@ -245,7 +180,6 @@ const ControlActions = {
     }
 
     if (currentSubIndex === -1) {
-      console.log(`[Repeat] no match found, seeking to first subtitle at ${subtitles[0].startTime.toFixed(3)}`);
       video.currentTime = subtitles[0].startTime;
       if (video.paused) {
         video.play();
@@ -254,7 +188,6 @@ const ControlActions = {
     }
 
     const currentSub = subtitles[currentSubIndex];
-    console.log(`[Repeat] matched sub[${currentSubIndex}]: [${currentSub.startTime.toFixed(3)}-${currentSub.endTime.toFixed(3)}], seeking from ${currentTime.toFixed(3)} to ${currentSub.startTime.toFixed(3)}`);
     video.currentTime = currentSub.startTime;
 
     // Resume playback if paused (e.g., after auto-pause)
@@ -272,7 +205,6 @@ const ControlActions = {
     if (!video) return;
 
     video.playbackRate = speed;
-    console.info('DualSubExtension: Playback speed set to', speed + 'x');
   },
 
   /**

@@ -19,10 +19,6 @@ async function loadDualSubPreference() {
         const result = await chrome.storage.sync.get("dualSubEnabled");
         if (result && typeof result.dualSubEnabled === 'boolean') {
             dualSubEnabled = result.dualSubEnabled;
-            console.log("YleDualSubExtension: Loaded dual sub preference:", dualSubEnabled);
-        }
-        else {
-            console.log("YleDualSubExtension: No dual sub preference found in storage, using default:", dualSubEnabled);
         }
         return dualSubEnabled;
     }
@@ -45,7 +41,6 @@ async function loadExtensionEnabledState() {
     try {
         const result = await chrome.storage.sync.get(['extensionEnabled']);
         extensionEnabled = result.extensionEnabled !== false; // Default to true
-        console.info('DualSubExtension: Extension enabled state loaded:', extensionEnabled);
     }
     catch (error) {
         console.warn('DualSubExtension: Error loading extension enabled state:', error);
@@ -79,7 +74,6 @@ async function loadPlaybackSpeedPreference() {
         if (typeof result.playbackSpeed === 'number') {
             playbackSpeed = result.playbackSpeed;
             applyPlaybackSpeed();
-            console.info('DualSubExtension: Loaded playback speed preference:', playbackSpeed);
         }
     }
     catch (error) {
@@ -194,7 +188,6 @@ function setupVideoSpeedControl() {
             if (ccActive === _ccWasActive)
                 return;
             _ccWasActive = ccActive;
-            console.info(`DualSubExtension: CC state changed (${reason}) ->`, ccActive ? 'ON' : 'OFF');
             emitCcState(ccActive, reason);
         };
         // Emit initial state so keyboard gating and panel state never stay stale.
@@ -205,7 +198,6 @@ function setupVideoSpeedControl() {
         // Text tracks may initialize asynchronously after video appears.
         setTimeout(() => syncCcState('post-init-300ms'), 300);
         setTimeout(() => syncCcState('post-init-1000ms'), 1000);
-        console.info('DualSubExtension: TextTrack CC detection initialized, ccActive:', _ccWasActive);
     }
 }
 // Initial setup after a short delay
@@ -351,7 +343,6 @@ function scheduleAutoPause(fromRetry = false) {
         return;
     }
     const delay = (remaining / video.playbackRate) * 1000;
-    console.log(`[AutoPause] SCHEDULED: endTime=${endTime.toFixed(3)}, currentTime=${currentTime.toFixed(3)}, delay=${delay.toFixed(0)}ms`);
     const pauseTarget = pauseAt;
     _autoPauseTimeout = setTimeout(function autoPauseCheck() {
         _autoPauseTimeout = null;
@@ -361,14 +352,12 @@ function scheduleAutoPause(fromRetry = false) {
         if (v && !v.paused) {
             if (v.currentTime >= pauseTarget) {
                 v.pause();
-                console.log(`[AutoPause] PAUSED at ${v.currentTime.toFixed(3)}`);
             }
             else {
                 // Timer fired early (seek-to-play startup delay causes video position
                 // to lag behind wall-clock timer). Re-schedule for remaining time.
                 const rem = pauseTarget - v.currentTime;
                 const reDelay = (rem / v.playbackRate) * 1000;
-                console.log(`[AutoPause] RE-SCHEDULED: pos=${v.currentTime.toFixed(3)}, target=${pauseTarget.toFixed(3)}, delay=${reDelay.toFixed(0)}ms`);
                 _autoPauseTimeout = setTimeout(autoPauseCheck, reDelay);
             }
         }
@@ -395,7 +384,6 @@ async function loadAutoPausePreference() {
         const result = await chrome.storage.sync.get("autoPauseEnabled");
         if (result && typeof result.autoPauseEnabled === 'boolean') {
             autoPauseEnabled = result.autoPauseEnabled;
-            console.log("YleDualSubExtension: Loaded auto-pause preference:", autoPauseEnabled);
             updateAutoPauseSwitchUI();
         }
     }
@@ -425,9 +413,7 @@ function startSettingsBootstrap() {
             loadAutoPausePreference(),
             loadExtensionEnabledState(),
             loadPlaybackSpeedPreference(),
-        ]).then(() => {
-            console.info('DualSubExtension: Settings bootstrap complete');
-        }).catch((error) => {
+        ]).catch((error) => {
             console.warn('DualSubExtension: Settings bootstrap failed:', error);
         });
     }
@@ -457,14 +443,12 @@ chrome.storage.onChanged.addListener(async (changes, namespace) => {
         if (newSize && typeof newSize === 'string') {
             subtitleFontSize = newSize;
             applySubtitleFontSize();
-            console.info(`YleDualSubExtension: Subtitle font size updated to ${newSize}`);
         }
     }
     if (changes.extensionEnabled) {
         const newEnabled = changes.extensionEnabled.newValue !== false;
         if (newEnabled !== extensionEnabled) {
             extensionEnabled = newEnabled;
-            console.info('DualSubExtension: Extension enabled changed via storage:', newEnabled);
             ControlIntegration.updateState({ extensionEnabled: newEnabled });
         }
     }
@@ -472,7 +456,6 @@ chrome.storage.onChanged.addListener(async (changes, namespace) => {
         const newTargetLanguage = changes.targetLanguage.newValue || 'EN-US';
         const previousTargetLanguage = targetLanguage;
         targetLanguage = newTargetLanguage;
-        console.info('DualSubExtension: Target language changed via storage:', newTargetLanguage);
         ControlIntegration.setTargetLanguage(newTargetLanguage);
         if (previousTargetLanguage !== newTargetLanguage) {
             document.dispatchEvent(new CustomEvent('dscTargetLanguageChanged', {

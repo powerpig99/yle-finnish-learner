@@ -114,7 +114,6 @@ class ControlPanel {
     this._setupKeyboard();
 
     this._mounted = true;
-    console.info('DualSubExtension: Control panel mounted for YLE Areena');
 
     return this.element;
   }
@@ -161,10 +160,6 @@ class ControlPanel {
 
     return panel;
   }
-
-  // REMOVED: _getStatusBadgeText() and _getStatusBadgeClass()
-  // No status badges needed - user controls everything manually
-
   /**
    * Get the panel HTML
    * Simplified: no blocking/disabled states, user controls everything
@@ -510,9 +505,6 @@ class ControlPanel {
       this._elements.warning.style.display = this.state.showWarning ? 'inline-flex' : 'none';
     }
   }
-
-  // REMOVED: _updateStatusBadge() - no status badges needed
-
   /**
    * Update the disabled state of the features container
    * Features are only disabled when extension is OFF

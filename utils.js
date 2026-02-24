@@ -290,15 +290,12 @@ async function loadTargetLanguageFromChromeStorageSync() {
   try {
     const storageSyncInformation = await chrome.storage.sync.get("targetLanguage");
     if (!storageSyncInformation || typeof storageSyncInformation !== 'object') {
-      console.info('YleDualSubExtension: No settings found in storage');
       return DEFAULT_TARGET_LANGUAGE;
     }
 
     if (storageSyncInformation.targetLanguage &&
       typeof storageSyncInformation.targetLanguage === 'string') {
       return storageSyncInformation.targetLanguage;
-    } else {
-      console.info('YleDualSubExtension: No target language found in storage, using default');
     }
     return DEFAULT_TARGET_LANGUAGE;
   } catch (error) {

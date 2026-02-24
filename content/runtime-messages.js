@@ -6,7 +6,6 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     switch (message.action) {
         case 'extensionToggled': {
             extensionEnabled = message.enabled;
-            console.info('DualSubExtension: Received extensionToggled from popup:', message.enabled);
             ControlIntegration._handleExtensionToggle(message.enabled);
             sendResponse({ success: true });
             return false;
@@ -27,7 +26,6 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
                         const count = countRequest.result;
                         const clearRequest = store.clear();
                         clearRequest.onsuccess = () => {
-                            console.info('DualSubExtension: Cleared subtitle translation cache:', count, 'entries');
                             sendResponse({ success: true, count });
                         };
                         clearRequest.onerror = () => {
@@ -102,7 +100,6 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
                     }
                     const count = await clearAllWordTranslations(globalDatabaseInstance);
                     wordTranslationCache.clear();
-                    console.info('DualSubExtension: Cleared word translation cache:', count, 'entries');
                     sendResponse({ success: true, count });
                 }
                 catch (e) {
