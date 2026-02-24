@@ -18,7 +18,7 @@ All data is stored locally in your browser:
 
 This extension only communicates with the following external service:
 
-- **DeepL API** (api-free.deepl.com / api.deepl.com): Finnish subtitle text is sent to DeepL for translation to target language (English, Vietnamese). This is the core functionality of the extension. Your own API key is used for authentication. See DeepL's privacy policy at https://www.deepl.com/privacy
+- **DeepL API** (api-free.deepl.com): Finnish subtitle text is sent to DeepL for translation to target language (English, Vietnamese). This is the core functionality of the extension. Your own API key is used for authentication. See DeepL's privacy policy at https://www.deepl.com/privacy
 
 ## Data Collection
 
