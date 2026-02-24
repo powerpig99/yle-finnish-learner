@@ -1,6 +1,6 @@
 {
   "meta": {
-    "generatedAt": "2026-02-24T18:25:05.159Z",
+    "generatedAt": "2026-02-24T18:32:11.414Z",
     "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/145.0.0.0 Safari/537.36",
     "criteria": {
       "minThroughputX": 0.75,
@@ -18,15 +18,15 @@
         "channels": 2
       },
       "metrics": {
-        "elapsedMs": 147,
-        "throughputX": 54.421768707483,
+        "elapsedMs": 131,
+        "throughputX": 61.06870229007633,
         "outputBytes": 128731,
         "outputSha256": "01bc311dd22e4bfeb308e44b1dde64dc086173bb70617b338aff7794ea52e8d3",
         "outputMimeType": "audio/mp3",
-        "heapBefore": 14530028,
-        "heapAfter": 21742806,
-        "heapDelta": 7212778,
-        "peakHeapDelta": 14343213
+        "heapBefore": 14528860,
+        "heapAfter": 21926862,
+        "heapDelta": 7398002,
+        "peakHeapDelta": 14501701
       },
       "validity": {
         "frame": {
@@ -55,15 +55,15 @@
         "channels": 1
       },
       "metrics": {
-        "elapsedMs": 248,
-        "throughputX": 32.25806451612903,
+        "elapsedMs": 235,
+        "throughputX": 34.04255319148936,
         "outputBytes": 128640,
         "outputSha256": "608f1e732053fa65c3487abf6f1c532c69d8bfa14b7b39d56ed1292163db356a",
         "outputMimeType": "audio/mp3",
-        "heapBefore": 21742806,
-        "heapAfter": 38624543,
-        "heapDelta": 16881737,
-        "peakHeapDelta": 16881737
+        "heapBefore": 21926862,
+        "heapAfter": 40627775,
+        "heapDelta": 18700913,
+        "peakHeapDelta": 18700913
       },
       "validity": {
         "frame": {
@@ -92,15 +92,15 @@
         "channels": 2
       },
       "metrics": {
-        "elapsedMs": 363,
-        "throughputX": 33.057851239669425,
+        "elapsedMs": 339,
+        "throughputX": 35.39823008849557,
         "outputBytes": 192679,
         "outputSha256": "677c5044f266d77387c2b77224063b97f3deaad265f15cfe5dcdbbd6cd1ec5e6",
         "outputMimeType": "audio/mp3",
-        "heapBefore": 38624543,
-        "heapAfter": 71802551,
-        "heapDelta": 33178008,
-        "peakHeapDelta": 93491096
+        "heapBefore": 40627775,
+        "heapAfter": 93494463,
+        "heapDelta": 52866688,
+        "peakHeapDelta": 92839672
       },
       "validity": {
         "frame": {
@@ -129,14 +129,14 @@
         "channels": 1
       },
       "metrics": {
-        "elapsedMs": 86,
-        "throughputX": 69.76744186046513,
+        "elapsedMs": 82,
+        "throughputX": 73.17073170731707,
         "outputBytes": 96548,
         "outputSha256": "992def96baeabce9b38ed4f4e8096e277687e02a8821cb16a8b1960a94322104",
         "outputMimeType": "audio/mp3",
-        "heapBefore": 71802551,
-        "heapAfter": 46907468,
-        "heapDelta": -24895083,
+        "heapBefore": 93494463,
+        "heapAfter": 86139460,
+        "heapDelta": -7355003,
         "peakHeapDelta": 0
       },
       "validity": {
@@ -166,15 +166,15 @@
         "channels": 2
       },
       "metrics": {
-        "elapsedMs": 156.70000004768372,
-        "throughputX": 38.289725578648394,
+        "elapsedMs": 144,
+        "throughputX": 41.66666666666667,
         "outputBytes": 96384,
         "outputSha256": "dcbda68ddd991ce8f81f5d29314fdd026dc5bd16167445bdc336e1b4194336a4",
         "outputMimeType": "audio/mp3",
-        "heapBefore": 46907468,
-        "heapAfter": 66884014,
-        "heapDelta": 19976546,
-        "peakHeapDelta": 59396015
+        "heapBefore": 86139460,
+        "heapAfter": 38095210,
+        "heapDelta": -48044250,
+        "peakHeapDelta": 1465255
       },
       "validity": {
         "frame": {
@@ -202,8 +202,8 @@
       "pass": true,
       "failures": [],
       "summary": {
-        "elapsedMs": 147,
-        "throughputX": 54.421768707483,
+        "elapsedMs": 131,
+        "throughputX": 61.06870229007633,
         "outputBytes": 128731,
         "outputMimeType": "audio/mp3",
         "frame": {
@@ -226,8 +226,8 @@
       "pass": true,
       "failures": [],
       "summary": {
-        "elapsedMs": 248,
-        "throughputX": 32.25806451612903,
+        "elapsedMs": 235,
+        "throughputX": 34.04255319148936,
         "outputBytes": 128640,
         "outputMimeType": "audio/mp3",
         "frame": {
@@ -250,8 +250,8 @@
       "pass": true,
       "failures": [],
       "summary": {
-        "elapsedMs": 363,
-        "throughputX": 33.057851239669425,
+        "elapsedMs": 339,
+        "throughputX": 35.39823008849557,
         "outputBytes": 192679,
         "outputMimeType": "audio/mp3",
         "frame": {
@@ -274,8 +274,8 @@
       "pass": true,
       "failures": [],
       "summary": {
-        "elapsedMs": 86,
-        "throughputX": 69.76744186046513,
+        "elapsedMs": 82,
+        "throughputX": 73.17073170731707,
         "outputBytes": 96548,
         "outputMimeType": "audio/mp3",
         "frame": {
@@ -298,8 +298,8 @@
       "pass": true,
       "failures": [],
       "summary": {
-        "elapsedMs": 156.70000004768372,
-        "throughputX": 38.289725578648394,
+        "elapsedMs": 144,
+        "throughputX": 41.66666666666667,
         "outputBytes": 96384,
         "outputMimeType": "audio/mp3",
         "frame": {
