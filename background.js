@@ -178,12 +178,8 @@ async function downloadBlobViaAPI(dataUrl, filename) {
 
 const YLE_TAB_URL_PATTERN = 'https://areena.yle.fi/*';
 
-async function queryYleTabs() {
-    return chrome.tabs.query({ url: [YLE_TAB_URL_PATTERN] });
-}
-
 async function requestCountFromYleTabs(action) {
-    const tabs = await queryYleTabs();
+    const tabs = await chrome.tabs.query({ url: [YLE_TAB_URL_PATTERN] });
     if (tabs.length === 0) {
         return [];
     }

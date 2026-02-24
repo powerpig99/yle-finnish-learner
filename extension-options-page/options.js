@@ -393,11 +393,6 @@ function cacheDomReferences() {
 }
 
 async function initializeOptionsPage() {
-  if (typeof chrome === 'undefined' || !chrome.storage || !chrome.storage.sync || !chrome.runtime) {
-    console.error('Chrome extension APIs are unavailable on this page.');
-    return;
-  }
-
   cacheDomReferences();
   buildProviderList();
   buildLanguageSelect();

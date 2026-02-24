@@ -291,43 +291,17 @@ async function loadMovieCacheAndUpdateMetadata(movieName) {
     const lastAccessedDays = Math.floor(Date.now() / (1000 * 60 * 60 * 24));
     await upsertMovieMetadata(db, currentMovieName, lastAccessedDays);
 }
-document.addEventListener("sendTranslationTextEvent", (e) => {
-    /**
-     * Listening for incoming subtitle texts loaded into video player from injected.js
-     * Send raw Finnish text from subtitle to a translation queue
-     * Skip if batch translation is in progress (batch handles everything)
-     * @param {Event} e
-     */
-    // Skip individual processing if batch translation is handling it
-    if (isBatchTranslating) {
-        return;
-    }
-    /** @type {string} */
-    const rawSubtitleFinnishText = e.detail;
-    const translationKey = toTranslationKey(rawSubtitleFinnishText);
-    if (sharedTranslationMap.has(translationKey)) {
-        return;
-    }
-    if (translationKey.length <= 1 || !/[a-zäöå]/.test(translationKey)) {
-        sharedTranslationMap.set(translationKey, translationKey);
-        return;
-    }
-    translationQueue.addToQueue(rawSubtitleFinnishText);
-    translationQueue.processQueue().catch((error) => {
-        console.error("YleDualSubExtension: Error processing translation queue:", error);
-    });
-});
 // Listen for batch translation events from yle-injected.js
 document.addEventListener("sendBatchTranslationEvent", (e) => {
     /**
      * Handle batch translation of all subtitles with context
      * This is triggered when a VTT file is loaded on YLE Areena
      */
-    const { subtitles, source } = e.detail;
+    const { subtitles } = e.detail;
     if (!subtitles || subtitles.length === 0) {
         return;
     }
-    console.info(`DualSubExtension: Processing batch of ${subtitles.length} subtitles from ${source || 'yle'}`);
+    console.info(`DualSubExtension: Processing batch of ${subtitles.length} subtitles`);
     // Start batch translation in the background
     handleBatchTranslation(subtitles).catch((error) => {
         console.error("DualSubExtension: Error in batch translation:", error);

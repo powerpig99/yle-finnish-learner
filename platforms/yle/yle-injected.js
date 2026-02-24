@@ -1051,7 +1051,7 @@ function collectSubtitlesFromVttText(vttText) {
     return subtitles;
 }
 
-function dispatchBatchTranslation(subtitles, vttUrl, source = '') {
+function dispatchBatchTranslation(subtitles, source = '') {
     if (subtitles.length === 0) {
         return;
     }
@@ -1062,9 +1062,7 @@ function dispatchBatchTranslation(subtitles, vttUrl, source = '') {
         bubbles: true,
         cancelable: true,
         detail: {
-            subtitles,
-            vttUrl,
-            detectedLanguage: LanguageDetector._detected
+            subtitles
         }
     });
     document.dispatchEvent(batchEvent);
@@ -1101,7 +1099,7 @@ function dispatchBatchTranslation(subtitles, vttUrl, source = '') {
             try {
                 const fullVttFileResponseText = decoder.decode(this.response);
                 const allSubtitles = collectSubtitlesFromVttText(fullVttFileResponseText);
-                dispatchBatchTranslation(allSubtitles, this._url);
+                dispatchBatchTranslation(allSubtitles);
             } catch (e) {
                 console.error("YleDualSubExtension: Failed to parse VTT file:", e);
             }
@@ -1133,7 +1131,7 @@ function dispatchBatchTranslation(subtitles, vttUrl, source = '') {
                 const clonedResponse = response.clone();
                 const text = await clonedResponse.text();
                 const allSubtitles = collectSubtitlesFromVttText(text);
-                dispatchBatchTranslation(allSubtitles, url, 'fetch');
+                dispatchBatchTranslation(allSubtitles, 'fetch');
             } catch (e) {
                 console.error("YleDualSubExtension: [fetch] Failed to parse VTT file:", e);
             }

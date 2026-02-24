@@ -245,9 +245,7 @@ document.addEventListener('dscTargetLanguageChanged', (e) => {
     sharedTranslationMap.clear();
     sharedTranslationErrorMap.clear();
     // Drop pending queue items from the previous language context.
-    if (translationQueue && Array.isArray(translationQueue.queue)) {
-        translationQueue.queue.length = 0;
-    }
+    translationQueue.queue.length = 0;
     const originalSubtitlesWrapper = getOriginalSubtitlesWrapper();
     const displayedSubtitlesWrapper = document.getElementById('displayed-subtitles-wrapper');
     if (!originalSubtitlesWrapper || !displayedSubtitlesWrapper) {
