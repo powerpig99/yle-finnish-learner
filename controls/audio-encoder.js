@@ -1,7 +1,7 @@
 /**
  * Audio Encoder Module
  *
- * Handles encoding audio data to MP3 format using lamejs library.
+ * Handles encoding audio data to MP3 format using shine-mp3.
  * Used for the audio download feature.
  */
 
@@ -10,17 +10,21 @@ const AudioEncoder = {
    * Default encoding options
    */
   DEFAULT_OPTIONS: {
-    bitRate: 128,      // kbps
-    sampleRate: 44100, // Hz
-    channels: 2        // stereo
+    bitRate: 128 // kbps
   },
 
-  /**
-   * Check if lamejs is available
-   * @returns {boolean}
-   */
-  isAvailable() {
-    return typeof lamejs !== 'undefined' && typeof lamejs.Mp3Encoder === 'function';
+  _isShineAvailable() {
+    return typeof shineLamejs !== 'undefined' && typeof shineLamejs.Mp3Encoder === 'function';
+  },
+
+  async _ensureShineInitialized() {
+    if (!this._isShineAvailable()) {
+      throw new Error('shine-mp3 library not loaded');
+    }
+
+    if (shineLamejs.initialized && typeof shineLamejs.initialized.then === 'function') {
+      await shineLamejs.initialized;
+    }
   },
 
   /**
@@ -32,20 +36,15 @@ const AudioEncoder = {
    * @returns {Promise<Blob>} - MP3 file as Blob
    */
   async encodeToMP3(audioBuffer, options = {}, onProgress = null) {
-    if (!this.isAvailable()) {
-      throw new Error('lamejs library not loaded');
-    }
+    await this._ensureShineInitialized();
 
     const opts = { ...this.DEFAULT_OPTIONS, ...options };
     const channels = audioBuffer.numberOfChannels;
     const sampleRate = audioBuffer.sampleRate;
+    const encoderChannels = channels === 1 ? 1 : 2;
 
     // Create encoder
-    const mp3encoder = new lamejs.Mp3Encoder(
-      channels === 1 ? 1 : 2,
-      sampleRate,
-      opts.bitRate
-    );
+    const mp3encoder = new shineLamejs.Mp3Encoder(encoderChannels, sampleRate, opts.bitRate);
 
     const mp3Data = [];
     const samplesPerFrame = 1152; // Standard MP3 frame size

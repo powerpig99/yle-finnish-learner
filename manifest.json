@@ -16,7 +16,7 @@
       "matches": ["https://areena.yle.fi/*"],
       "run_at": "document_end",
       "js": [
-        "lib/lamejs.min.js",
+        "lib/shine-mp3.js",
         "controls/control-icons.js",
         "controls/control-actions.js",
         "controls/control-keyboard.js",
