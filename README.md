@@ -140,6 +140,13 @@ Load the extension in developer mode and test on YLE Areena.
 
 ## Changelog
 
+### v6.0.0 (February 2026)
+- **Changed:** Zero external dependencies — no build step, no npm packages, source JS loaded directly by Chrome
+- **Changed:** Owned MP3 encoder replaces lamejs/shine external libraries
+- **Changed:** TypeScript removed — plain JS with JSDoc type annotations
+- **Improved:** Codebase reduced 26% (~5,400 lines) through recursive dead code audit
+- **Improved:** All features preserved with simpler, more maintainable architecture
+
 ### v5.3.0 (February 2026)
 - **Fixed:** Dual subtitles not displaying due to YLE Areena player DOM restructure
 - **Improved:** Subtitle rendering now uses a generic text finder, resilient to future YLE DOM changes
