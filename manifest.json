@@ -43,6 +43,7 @@
     }
   ],
   "host_permissions": [
+    "https://areena.yle.fi/*",
     "https://api-free.deepl.com/*",
     "https://api.deepl.com/*",
     "https://translate.googleapis.com/*",

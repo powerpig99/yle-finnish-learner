@@ -12,16 +12,62 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
             return false;
         }
         case 'clearSubtitleCache': {
-            const count = sharedTranslationMap.size;
+            // Clear in-memory subtitle cache immediately.
             sharedTranslationMap.clear();
-            console.info('DualSubExtension: Cleared subtitle translation cache:', count, 'entries');
-            sendResponse({ success: true, count });
-            return false;
+            // Clear persistent subtitle cache from IndexedDB.
+            (async () => {
+                try {
+                    if (!globalDatabaseInstance) {
+                        globalDatabaseInstance = await openDatabase();
+                    }
+                    const transaction = globalDatabaseInstance.transaction(['SubtitlesCache'], 'readwrite');
+                    const store = transaction.objectStore('SubtitlesCache');
+                    const countRequest = store.count();
+                    countRequest.onsuccess = () => {
+                        const count = countRequest.result;
+                        const clearRequest = store.clear();
+                        clearRequest.onsuccess = () => {
+                            console.info('DualSubExtension: Cleared subtitle translation cache:', count, 'entries');
+                            sendResponse({ success: true, count });
+                        };
+                        clearRequest.onerror = () => {
+                            sendResponse({ success: false, count: 0 });
+                        };
+                    };
+                    countRequest.onerror = () => {
+                        sendResponse({ success: false, count: 0 });
+                    };
+                }
+                catch (e) {
+                    console.error('DualSubExtension: Error clearing subtitle cache:', e);
+                    sendResponse({ success: false, count: 0 });
+                }
+            })();
+            return true;
         }
         case 'getSubtitleCacheCount': {
-            const count = sharedTranslationMap.size;
-            sendResponse({ success: true, count });
-            return false;
+            // Count entries in IndexedDB SubtitlesCache store.
+            (async () => {
+                try {
+                    if (!globalDatabaseInstance) {
+                        globalDatabaseInstance = await openDatabase();
+                    }
+                    const transaction = globalDatabaseInstance.transaction(['SubtitlesCache'], 'readonly');
+                    const store = transaction.objectStore('SubtitlesCache');
+                    const countRequest = store.count();
+                    countRequest.onsuccess = () => {
+                        sendResponse({ success: true, count: countRequest.result });
+                    };
+                    countRequest.onerror = () => {
+                        sendResponse({ success: true, count: 0 });
+                    };
+                }
+                catch (e) {
+                    console.error('DualSubExtension: Error counting subtitle cache:', e);
+                    sendResponse({ success: true, count: 0 });
+                }
+            })();
+            return true;
         }
         case 'getWordCacheCount': {
             // Count entries in IndexedDB WordTranslations store.
