@@ -1,7 +1,6 @@
 // ==================================
 // YLE AREENA EXTENSION
 // ==================================
-console.info('DualSubExtension: YLE Areena extension loaded');
 // ==================================
 // SECTION 1: STATE & INITIALIZATION
 // ==================================
@@ -27,21 +26,17 @@ function toTranslationKey(rawSubtitleFinnishText) {
 // Flag to prevent concurrent initialization
 let _unifiedPanelInitializing = false;
 async function initializeUnifiedControlPanel() {
-    console.log('DualSubExtension: initializeUnifiedControlPanel called');
     // Check if already initialized OR currently initializing (prevent race condition)
     const isActuallyInitialized = ControlIntegration.isInitialized();
     if (isActuallyInitialized) {
-        console.log('DualSubExtension: ControlIntegration already initialized, skipping');
         return;
     }
     if (_unifiedPanelInitializing) {
-        console.log('DualSubExtension: Panel currently initializing, skipping');
         return;
     }
     // Mark as initializing to prevent concurrent calls
     _unifiedPanelInitializing = true;
     // Wait briefly for player controls/container to settle before mounting panel
-    console.log('DualSubExtension: Waiting 500ms for player UI to settle...');
     await new Promise(resolve => setTimeout(resolve, 500));
     try {
         await startSettingsBootstrap();
@@ -50,10 +45,6 @@ async function initializeUnifiedControlPanel() {
         const captionsEnabled = video
             ? Array.from(video.textTracks).some(t => t.mode !== 'disabled')
             : (fullSubtitles.length > 0 || !!detectedSourceLanguage);
-        console.log('DualSubExtension: YLE captions initial state:', captionsEnabled);
-        console.log('DualSubExtension: Calling ControlIntegration.init with state:', {
-            dualSubEnabled, autoPauseEnabled, playbackSpeed, captionsEnabled
-        });
         // Use detected source language if available, otherwise don't override
         const initOptions = {
             dualSubEnabled: dualSubEnabled,
@@ -66,18 +57,12 @@ async function initializeUnifiedControlPanel() {
         }
         const panel = await ControlIntegration.init(initOptions);
         if (panel) {
-            console.info('DualSubExtension: Unified control panel initialized successfully');
             // Sync any already-loaded subtitles (YLE loads subtitles before panel init)
             if (fullSubtitles.length > 0) {
                 ControlIntegration.setSubtitles(fullSubtitles);
-                console.info('DualSubExtension: Synced', fullSubtitles.length, 'pre-loaded subtitles with ControlIntegration');
             }
             // After init, show overlay if conditions are met (CC on + extension on)
             const state = ControlIntegration.getState();
-            console.info('DualSubExtension: Initial state after init:', {
-                extensionEnabled: state.extensionEnabled,
-                dualSubEnabled: state.dualSubEnabled
-            });
             // Update global variable from loaded state
             extensionEnabled = state.extensionEnabled;
             dualSubEnabled = state.dualSubEnabled;
@@ -93,10 +78,6 @@ async function initializeUnifiedControlPanel() {
                 if (displayedSubtitlesWrapper) {
                     displayedSubtitlesWrapper.style.display = 'flex';
                 }
-                console.info('DualSubExtension: Initial state: CC on + Extension on - showing our overlay');
-            }
-            else if (captionsEnabled && !state.extensionEnabled) {
-                console.info('DualSubExtension: Initial state: CC on + Extension off - showing native captions');
             }
         }
         else {
@@ -114,14 +95,9 @@ async function initializeUnifiedControlPanel() {
 // ==================================
 // END UNIFIED CONTROL PANEL FLAG
 // ==================================
-/** @type {Array<{time: number, text: string}>}
- * Array of subtitle appearances with their video timestamps
- * Used for skip to next/previous subtitle feature
- */
-const subtitleTimestamps = [];
 /** @type {Array<{startTime: number, endTime: number, text: string}>}
  * Array of full subtitle data with start/end times
- * Used for repeat subtitle feature - accumulates like subtitleTimestamps
+ * Used for skip/repeat subtitle features
  */
 const fullSubtitles = [];
 /**
@@ -136,10 +112,7 @@ let currentMovieName = null;
 let globalDatabaseInstance = null;
 openDatabase().then(db => {
     globalDatabaseInstance = db;
-    console.info('YleDualSubExtension: Database opened successfully, stores:', Array.from(db.objectStoreNames));
-    cleanupOldMovieData(db).then((cleanCount) => {
-        console.info(`YleDualSubExtension: Clean ${cleanCount} movies data`);
-    }).catch(error => { console.error("YleDualSubExtension: Error when cleaning old movie data: ", error); });
+    cleanupOldMovieData(db).catch(error => { console.error("YleDualSubExtension: Error when cleaning old movie data: ", error); });
 }).catch((error) => {
     console.error("YleDualSubExtension: Failed to established connection to indexDB: ", error);
 });
@@ -225,7 +198,6 @@ function hideBatchTranslationIndicator() {
  * @returns {Promise<void>}
  */
 async function addDualSubExtensionSection() {
-    console.log('DualSubExtension: addDualSubExtensionSection called');
     await initializeUnifiedControlPanel();
 }
 /**
@@ -265,7 +237,6 @@ async function getVideoTitle() {
 async function loadMovieCacheAndUpdateMetadata(movieName) {
     const db = await openDatabase();
     // Clear accumulated subtitles when starting a new video
-    subtitleTimestamps.length = 0;
     fullSubtitles.length = 0;
     // Use provided movie name or try to get from YLE page
     if (movieName) {
@@ -278,7 +249,6 @@ async function loadMovieCacheAndUpdateMetadata(movieName) {
         return;
     }
     const subtitleRecords = await loadSubtitlesByMovieName(db, currentMovieName, targetLanguage);
-    console.info(`YleDualSubExtension: Loaded ${subtitleRecords.length} cached subtitles for movie: ${currentMovieName}`);
     for (const subtitleRecord of subtitleRecords) {
         // Use toTranslationKey to normalize the key, matching how lookups are done
         sharedTranslationMap.set(toTranslationKey(subtitleRecord.originalText), subtitleRecord.translatedText);
@@ -296,7 +266,6 @@ document.addEventListener("sendBatchTranslationEvent", (e) => {
     if (!subtitles || subtitles.length === 0) {
         return;
     }
-    console.info(`DualSubExtension: Processing batch of ${subtitles.length} subtitles`);
     // Start batch translation in the background
     handleBatchTranslation(subtitles).catch((error) => {
         console.error("DualSubExtension: Error in batch translation:", error);

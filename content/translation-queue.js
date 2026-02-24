@@ -36,9 +36,7 @@ class TranslationQueue {
                 }
             }
             try {
-                console.log("YleDualSubExtension: Sending translation request for", toProcessItems.length, "items");
                 const [isSucceeded, translationResponse] = await fetchTranslation(toProcessItems);
-                console.log("YleDualSubExtension: Translation response - success:", isSucceeded, "response:", typeof translationResponse);
                 if (isSucceeded) {
                     const translatedTexts = translationResponse;
                     /**
@@ -51,7 +49,6 @@ class TranslationQueue {
                         const sharedTranslationMapKey = toTranslationKey(rawSubtitleFinnishText);
                         // Skip failed translations (null) - they will be retried next time
                         if (translatedText === null || translatedText === undefined) {
-                            console.info(`YleDualSubExtension: JIT translation failed for "${rawSubtitleFinnishText.substring(0, 30)}..." - will retry later`);
                             continue;
                         }
                         const sharedTranslationMapValue = translatedText.trim().replace(/\n/g, ' ');
@@ -76,14 +73,10 @@ class TranslationQueue {
                 else {
                     const translationErrorMessage = translationResponse;
                     console.error("YleDualSubExtension: JIT translation error:", translationErrorMessage);
-                    // Don't cache failed translations - they will be retried on next subtitle display
-                    console.info(`YleDualSubExtension: ${toProcessItems.length} JIT translations failed - will retry later`);
                 }
             }
             catch (error) {
                 console.error("YleDualSubExtension: System error when translating text:", error);
-                // Don't cache failed translations - they will be retried on next subtitle display
-                console.info(`YleDualSubExtension: ${toProcessItems.length} JIT translations failed due to error - will retry later`);
             }
         }
         this.isProcessing = false;
@@ -93,9 +86,6 @@ const translationQueue = new TranslationQueue();
 // Batch translation state
 let isBatchTranslating = false;
 let batchTranslationProgress = { current: 0, total: 0 };
-function buildTimestampKey(startTime, text) {
-    return `${startTime.toFixed(3)}|${toTranslationKey(text)}`;
-}
 function buildFullSubtitleKey(startTime, endTime, text) {
     return `${startTime.toFixed(3)}|${endTime.toFixed(3)}|${toTranslationKey(text)}`;
 }
@@ -107,50 +97,34 @@ function buildFullSubtitleKey(startTime, endTime, text) {
 async function handleBatchTranslation(subtitles) {
     // Set flag IMMEDIATELY to block individual event processing
     if (isBatchTranslating) {
-        console.info("YleDualSubExtension: Batch translation already in progress, skipping...");
         return;
     }
     isBatchTranslating = true;
-    console.info(`YleDualSubExtension: Received ${subtitles.length} total subtitles for batch translation`);
-    // Pre-populate ALL subtitle timestamps for skip feature FIRST (before any early returns)
-    // Also accumulate full subtitles for repeat feature
-    const existingTimestampKeys = new Set(subtitleTimestamps.map(ts => buildTimestampKey(ts.time, ts.text)));
+    // Pre-populate full subtitles for skip/repeat features.
     const existingFullSubtitleKeys = new Set(fullSubtitles.map(sub => buildFullSubtitleKey(sub.startTime, sub.endTime, sub.text)));
     for (const sub of subtitles) {
-        if (sub.startTime !== undefined) {
-            const timestampKey = buildTimestampKey(sub.startTime, sub.text);
-            if (!existingTimestampKeys.has(timestampKey)) {
-                existingTimestampKeys.add(timestampKey);
-                subtitleTimestamps.push({ time: sub.startTime, text: sub.text });
-            }
-            // Accumulate full subtitle data for repeat feature (with startTime and endTime)
-            if (sub.endTime !== undefined) {
-                const fullSubtitleKey = buildFullSubtitleKey(sub.startTime, sub.endTime, sub.text);
-                if (!existingFullSubtitleKeys.has(fullSubtitleKey)) {
-                    existingFullSubtitleKeys.add(fullSubtitleKey);
-                    fullSubtitles.push({ startTime: sub.startTime, endTime: sub.endTime, text: sub.text });
-                }
-            }
+        if (sub.startTime === undefined || sub.endTime === undefined) {
+            continue;
+        }
+        const fullSubtitleKey = buildFullSubtitleKey(sub.startTime, sub.endTime, sub.text);
+        if (!existingFullSubtitleKeys.has(fullSubtitleKey)) {
+            existingFullSubtitleKeys.add(fullSubtitleKey);
+            fullSubtitles.push({ startTime: sub.startTime, endTime: sub.endTime, text: sub.text });
         }
     }
-    subtitleTimestamps.sort((a, b) => a.time - b.time);
     fullSubtitles.sort((a, b) => a.startTime - b.startTime);
-    console.info(`YleDualSubExtension: Pre-populated ${subtitleTimestamps.length} timestamps and ${fullSubtitles.length} full subtitles`);
     // Sync ACCUMULATED subtitles with ControlIntegration for skip/repeat functionality
     // Note: Call setSubtitles even if panel isn't mounted yet - it just stores the data
     ControlIntegration.setSubtitles(fullSubtitles);
-    console.info('YleDualSubExtension: Synced', fullSubtitles.length, 'accumulated subtitles with ControlIntegration');
     // Filter out subtitles that are already translated (from cache)
     const untranslatedSubtitles = subtitles.filter(sub => {
         const key = toTranslationKey(sub.text);
         return !sharedTranslationMap.has(key);
     });
     if (untranslatedSubtitles.length === 0) {
-        console.info("YleDualSubExtension: All subtitles already cached, no batch translation needed");
         isBatchTranslating = false;
         return;
     }
-    console.info(`YleDualSubExtension: Starting batch translation of ${untranslatedSubtitles.length} untranslated subtitles (${subtitles.length - untranslatedSubtitles.length} already cached)`);
     batchTranslationProgress = { current: 0, total: untranslatedSubtitles.length };
     showBatchTranslationIndicator();
     // Process in chunks of 10 for better reliability with Google Translate
@@ -177,7 +151,6 @@ async function handleBatchTranslation(subtitles) {
                     const sharedTranslationMapKey = toTranslationKey(rawSubtitleFinnishText);
                     // Skip failed translations (null) - they will be retried next time
                     if (translatedText === null || translatedText === undefined) {
-                        console.info(`YleDualSubExtension: Translation failed for "${rawSubtitleFinnishText.substring(0, 30)}..." - will retry later`);
                         continue;
                     }
                     const sharedTranslationMapValue = translatedText.trim().replace(/\n/g, ' ');
@@ -201,19 +174,14 @@ async function handleBatchTranslation(subtitles) {
             }
             else {
                 console.error("YleDualSubExtension: Batch translation error:", translationResponse);
-                // Don't cache failed translations - they will be retried on next subtitle display
-                console.info(`YleDualSubExtension: ${texts.length} translations failed - will retry later`);
             }
         }
         catch (error) {
             console.error("YleDualSubExtension: Error in batch translation chunk:", error);
-            // Don't cache failed translations - they will be retried on next subtitle display
-            console.info(`YleDualSubExtension: ${texts.length} translations failed due to error - will retry later`);
         }
         batchTranslationProgress.current += chunk.length;
         updateBatchTranslationIndicator();
     }
     isBatchTranslating = false;
     hideBatchTranslationIndicator();
-    console.info("YleDualSubExtension: Batch translation completed");
 }

@@ -317,26 +317,6 @@ function handleSubtitlesWrapperMutation(mutation) {
         lastDisplayedSubtitleText = currentFinnishText;
         displayedSubtitlesWrapper.innerHTML = "";
         addContentToDisplayedSubtitlesWrapper(displayedSubtitlesWrapper, finnishTextElements);
-        // Record subtitle timestamp for skip feature
-        const videoElement = document.querySelector('video');
-        if (videoElement && finnishTextElements.length > 0) {
-            const subtitleText = Array.from(finnishTextElements).map(el => el.textContent || '').join(' ').trim();
-            if (subtitleText) {
-                const currentTime = videoElement.currentTime;
-                // Only add if this is a new subtitle moment.
-                // Keep threshold tight so short back-to-back subtitles are not collapsed.
-                const lastEntry = subtitleTimestamps[subtitleTimestamps.length - 1];
-                const MIN_TIME_DELTA = 0.05;
-                if (!lastEntry || subtitleText !== lastEntry.text || Math.abs(lastEntry.time - currentTime) > MIN_TIME_DELTA) {
-                    subtitleTimestamps.push({ time: currentTime, text: subtitleText });
-                    // Keep array sorted and limit size to prevent memory issues
-                    subtitleTimestamps.sort((a, b) => a.time - b.time);
-                    if (subtitleTimestamps.length > 1000) {
-                        subtitleTimestamps.shift();
-                    }
-                }
-            }
-        }
     }
     else {
         // No added nodes - subtitles might have been cleared
@@ -408,10 +388,10 @@ const observer = new MutationObserver((mutations) => {
                 return;
             }
             if (isVideoElementAppearMutation(mutation)) {
-                addDualSubExtensionSection().then(() => { }).catch((error) => {
+                addDualSubExtensionSection().catch((error) => {
                     console.error("YleDualSubExtension: Error adding dual sub extension section:", error);
                 });
-                loadMovieCacheAndUpdateMetadata().then(() => { }).catch((error) => {
+                loadMovieCacheAndUpdateMetadata().catch((error) => {
                     console.error("YleDualSubExtension: Error populating shared translation map from cache:", error);
                 });
                 // Apply saved playback speed
