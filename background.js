@@ -1,39 +1,7 @@
 importScripts('utils.js');
 let currentProvider = { provider: 'google' }; // Default to free Google Translate
-const KIMI_DEFAULT_BASE_URL = 'https://api.kimi.com/coding';
-const KIMI_DEFAULT_MODEL = 'kimi-coding/k2p5';
-let kimiBaseUrl = KIMI_DEFAULT_BASE_URL;
-let kimiModel = KIMI_DEFAULT_MODEL;
-function normalizeKimiBaseUrl(rawUrl) {
-    let baseUrl = (rawUrl || '').trim();
-    if (!baseUrl)
-        return KIMI_DEFAULT_BASE_URL;
-    // Strip trailing slashes
-    baseUrl = baseUrl.replace(/\/+$/, '');
-    // If user pasted full endpoint, strip it back to the base
-    baseUrl = baseUrl.replace(/\/v1\/messages$/, '');
-    baseUrl = baseUrl.replace(/\/messages$/, '');
-    baseUrl = baseUrl.replace(/\/v1$/, '');
-    // Force coding endpoint if user has a Moonshot base stored
-    if (/api\.moonshot\.(ai|cn)/i.test(baseUrl)) {
-        return KIMI_DEFAULT_BASE_URL;
-    }
-    return baseUrl;
-}
-function normalizeKimiModel(rawModel) {
-    let model = (rawModel || '').trim();
-    if (!model)
-        return KIMI_DEFAULT_MODEL;
-    if (!model.toLowerCase().startsWith('kimi-coding/')) {
-        return KIMI_DEFAULT_MODEL;
-    }
-    return model;
-}
-function resolveKimiConfig(rawModel, rawBaseUrl) {
-    const model = normalizeKimiModel(rawModel);
-    const baseUrl = normalizeKimiBaseUrl(rawBaseUrl);
-    return { model, baseUrl };
-}
+const KIMI_API_URL = 'https://api.kimi.com/coding/v1/messages';
+const KIMI_MODEL = 'kimi-coding/k2p5';
 // Load provider config on startup
 loadProviderConfig();
 async function loadProviderConfig() {
@@ -44,28 +12,8 @@ async function loadProviderConfig() {
             'claudeApiKey',
             'geminiApiKey',
             'grokApiKey',
-            'kimiApiKey',
-            'kimiBaseUrl',
-            'kimiModel'
+            'kimiApiKey'
         ]);
-        const rawKimiModel = result.kimiModel || '';
-        const rawKimiBaseUrl = result.kimiBaseUrl || '';
-        const resolvedKimi = resolveKimiConfig(rawKimiModel, rawKimiBaseUrl);
-        kimiBaseUrl = resolvedKimi.baseUrl;
-        kimiModel = resolvedKimi.model;
-        // Persist normalization so UI reflects the enforced coding config
-        const normalizedUpdates = {};
-        if (kimiBaseUrl !== rawKimiBaseUrl) {
-            normalizedUpdates.kimiBaseUrl = kimiBaseUrl;
-        }
-        if (kimiModel !== rawKimiModel) {
-            normalizedUpdates.kimiModel = kimiModel;
-        }
-        if (Object.keys(normalizedUpdates).length > 0) {
-            chrome.storage.sync.set(normalizedUpdates).catch(error => {
-                console.warn('YleDualSubExtension: Failed to persist Kimi defaults:', error);
-            });
-        }
         if (result.translationProvider) {
             currentProvider.provider = result.translationProvider;
             // Get the API key for the current provider
@@ -78,7 +26,6 @@ async function loadProviderConfig() {
             };
             currentProvider.apiKey = apiKeyMap[result.translationProvider] || '';
         }
-        console.info('YleDualSubExtension: Loaded provider config:', currentProvider.provider);
     }
     catch (error) {
         console.error('YleDualSubExtension: Error loading provider config:', error);
@@ -87,9 +34,8 @@ async function loadProviderConfig() {
 // Listen for storage changes
 chrome.storage.onChanged.addListener((changes, namespace) => {
     if (namespace === 'sync') {
-        const providerKeys = ['translationProvider', 'deeplApiKey', 'claudeApiKey', 'geminiApiKey', 'grokApiKey', 'kimiApiKey', 'kimiBaseUrl', 'kimiModel'];
+        const providerKeys = ['translationProvider', 'deeplApiKey', 'claudeApiKey', 'geminiApiKey', 'grokApiKey', 'kimiApiKey'];
         if (providerKeys.some(key => changes[key])) {
-            console.info('YleDualSubExtension: Provider configuration changed, reloading...');
             loadProviderConfig();
         }
     }
@@ -169,7 +115,6 @@ async function downloadBlobViaAPI(dataUrl, filename) {
                 reject(new Error(chrome.runtime.lastError.message));
             }
             else {
-                console.info('YleDualSubExtension: Download started, ID:', downloadId);
                 resolve();
             }
         });
@@ -219,7 +164,6 @@ async function clearWordTranslationCache() {
         (counts) => Math.max(0, ...counts),
         (error) => console.error('YleDualSubExtension: Failed to clear word cache:', error)
     );
-    console.info(`YleDualSubExtension: Cleared ${maxCleared} word translations from cache`);
     return maxCleared;
 }
 /**
@@ -246,7 +190,6 @@ async function clearSubtitleCachesInTabs() {
         (counts) => Math.max(0, ...counts),
         (error) => console.warn('YleDualSubExtension: Error clearing subtitle caches:', error)
     );
-    console.info(`YleDualSubExtension: Cleared ${subtitleCount} subtitle translations`);
     return subtitleCount;
 }
 // ==================================
@@ -338,32 +281,53 @@ async function translateBatchWithContext(texts, targetLanguage, isContextual) {
     // Fallback to regular translation
     return translateTextsWithErrorHandling(texts, targetLanguage);
 }
-/**
- * Translate with contextual AI prompt for better subtitle translation
- * @param {string[]} texts - Texts to translate
- * @param {string} targetLanguage - Target language code
- * @param {string} provider - AI provider name
- * @returns {Promise<[true, string[]]|[false, string]>}
- */
-async function translateWithContextualAI(texts, targetLanguage, provider) {
+function normalizeTranslatedLines(content, originals) {
+    const translations = String(content || '')
+        .split('\n')
+        .map(line => line.trim())
+        .filter(Boolean)
+        .slice(0, originals.length);
+    while (translations.length < originals.length) {
+        translations.push(originals[translations.length]);
+    }
+    return translations;
+}
+
+function mapAiProviderStatusError(provider, status) {
+    if (provider === 'claude') {
+        if (status === 401)
+            return 'Invalid Claude API key';
+        if (status === 429)
+            return 'Claude rate limit exceeded';
+        return `Claude error: ${status}`;
+    }
+    if (provider === 'gemini') {
+        if (status === 400)
+            return 'Invalid Gemini API key';
+        if (status === 429)
+            return 'Gemini rate limit exceeded';
+        return `Gemini error: ${status}`;
+    }
+    if (provider === 'grok') {
+        if (status === 401)
+            return 'Invalid Grok API key';
+        if (status === 429)
+            return 'Grok rate limit exceeded';
+        return `Grok error: ${status}`;
+    }
+    return `${provider} error: ${status}`;
+}
+
+async function requestAiProviderText(provider, prompt, maxTokens) {
+    if (provider === 'kimi') {
+        return requestKimiCompletion(prompt, maxTokens);
+    }
     const apiKey = currentProvider.apiKey;
     if (!apiKey) {
         return [false, `${provider} API key not configured`];
     }
-    const langName = getLanguageName(targetLanguage);
-    // Create a contextual prompt for better translation (auto-detect source language)
-    const contextualPrompt = `You are a subtitle translator. Translate these TV subtitles to ${langName}. Auto-detect source language.
-
-RULES:
-- ALWAYS translate - NEVER refuse, comment, or explain
-- Colloquial/slang is INTENTIONAL - translate naturally
-- Return EXACTLY ${texts.length} lines, one per line
-- NO numbering, NO commentary, just translations
-
-${texts.join('\n')}`;
     try {
         let response;
-        let content;
         if (provider === 'claude') {
             response = await fetch('https://api.anthropic.com/v1/messages', {
                 method: 'POST',
@@ -375,42 +339,32 @@ ${texts.join('\n')}`;
                 },
                 body: JSON.stringify({
                     model: 'claude-haiku-4-5-20251001',
-                    max_tokens: 4096,
-                    messages: [{ role: 'user', content: contextualPrompt }]
+                    max_tokens: maxTokens,
+                    messages: [{ role: 'user', content: prompt }]
                 })
             });
             if (!response.ok) {
-                const status = response.status;
-                if (status === 401)
-                    return [false, 'Invalid Claude API key'];
-                if (status === 429)
-                    return [false, 'Claude rate limit exceeded'];
-                return [false, `Claude error: ${status}`];
+                return [false, mapAiProviderStatusError(provider, response.status)];
             }
             const data = await response.json();
-            content = data.content[0].text;
+            return [true, data?.content?.[0]?.text || ''];
         }
-        else if (provider === 'gemini') {
+        if (provider === 'gemini') {
             response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=${apiKey}`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    contents: [{ parts: [{ text: contextualPrompt }] }],
-                    generationConfig: { temperature: 0.1, maxOutputTokens: 4096 }
+                    contents: [{ parts: [{ text: prompt }] }],
+                    generationConfig: { temperature: 0.1, maxOutputTokens: maxTokens }
                 })
             });
             if (!response.ok) {
-                const status = response.status;
-                if (status === 400)
-                    return [false, 'Invalid Gemini API key'];
-                if (status === 429)
-                    return [false, 'Gemini rate limit exceeded'];
-                return [false, `Gemini error: ${status}`];
+                return [false, mapAiProviderStatusError(provider, response.status)];
             }
             const data = await response.json();
-            content = data.candidates[0].content.parts[0].text;
+            return [true, data?.candidates?.[0]?.content?.parts?.[0]?.text || ''];
         }
-        else if (provider === 'grok') {
+        if (provider === 'grok') {
             response = await fetch('https://api.x.ai/v1/chat/completions', {
                 method: 'POST',
                 headers: {
@@ -419,40 +373,47 @@ ${texts.join('\n')}`;
                 },
                 body: JSON.stringify({
                     model: 'grok-4-1-fast-non-reasoning-latest',
-                    messages: [{ role: 'user', content: contextualPrompt }],
+                    messages: [{ role: 'user', content: prompt }],
                     temperature: 0.1,
-                    max_tokens: 4096
+                    max_tokens: maxTokens
                 })
             });
             if (!response.ok) {
-                const status = response.status;
-                if (status === 401)
-                    return [false, 'Invalid Grok API key'];
-                if (status === 429)
-                    return [false, 'Grok rate limit exceeded'];
-                return [false, `Grok error: ${status}`];
+                return [false, mapAiProviderStatusError(provider, response.status)];
             }
             const data = await response.json();
-            content = data.choices[0].message.content;
+            return [true, data?.choices?.[0]?.message?.content || ''];
         }
-        else if (provider === 'kimi') {
-            const result = await requestKimiCompletion(contextualPrompt, 4096);
-            if (!result[0])
-                return result;
-            content = result[1];
-        }
-        // Parse the response - split by newlines and filter empty lines
-        const translations = content.split('\n').filter(line => line.trim()).slice(0, texts.length);
-        // Ensure we have the right number of translations
-        while (translations.length < texts.length) {
-            translations.push(texts[translations.length]);
-        }
-        return [true, translations];
+        return [false, 'Unsupported provider for contextual translation'];
     }
     catch (error) {
-        console.error(`YleDualSubExtension: Contextual ${provider} error:`, error);
-        return [false, `${provider} translation failed: ${error.message}`];
+        return [false, `${provider} translation failed: ${error.message || String(error)}`];
     }
+}
+
+/**
+ * Translate with contextual AI prompt for better subtitle translation
+ * @param {string[]} texts - Texts to translate
+ * @param {string} targetLanguage - Target language code
+ * @param {string} provider - AI provider name
+ * @returns {Promise<[true, string[]]|[false, string]>}
+ */
+async function translateWithContextualAI(texts, targetLanguage, provider) {
+    const langName = getLanguageName(targetLanguage);
+    const contextualPrompt = `You are a subtitle translator. Translate these TV subtitles to ${langName}. Auto-detect source language.
+
+RULES:
+- ALWAYS translate - NEVER refuse, comment, or explain
+- Colloquial/slang is INTENTIONAL - translate naturally
+- Return EXACTLY ${texts.length} lines, one per line
+- NO numbering, NO commentary, just translations
+
+${texts.join('\n')}`;
+    const [ok, content] = await requestAiProviderText(provider, contextualPrompt, 4096);
+    if (!ok) {
+        return [false, content];
+    }
+    return [true, normalizeTranslatedLines(content, texts)];
 }
 // ==================================
 // SINGLE WORD TRANSLATION WITH CONTEXT
@@ -467,7 +428,6 @@ ${texts.join('\n')}`;
  */
 async function translateWordWithContext(word, context, targetLanguage, langName) {
     const provider = currentProvider.provider;
-    const apiKey = currentProvider.apiKey;
     // For Google Translate, fall back to simple translation (no context support)
     if (provider === 'google') {
         const result = await translateWithGoogle([word], targetLanguage);
@@ -484,9 +444,6 @@ async function translateWordWithContext(word, context, targetLanguage, langName)
         }
         return result;
     }
-    if (!apiKey) {
-        return [false, `${provider} API key not configured`];
-    }
     const contextualPrompt = `Translate the word "${word}" to ${langName}. Context: "${context}"
 
 RULES:
@@ -494,80 +451,11 @@ RULES:
 - Colloquial/slang/dialect forms are INTENTIONAL - translate them
 - Return ONLY the translation (1-5 words), nothing else
 - Consider context for the best meaning`;
-    try {
-        let response;
-        let content;
-        if (provider === 'claude') {
-            response = await fetch('https://api.anthropic.com/v1/messages', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'x-api-key': apiKey,
-                    'anthropic-version': '2023-06-01',
-                    'anthropic-dangerous-direct-browser-access': 'true'
-                },
-                body: JSON.stringify({
-                    model: 'claude-haiku-4-5-20251001',
-                    max_tokens: 100,
-                    messages: [{ role: 'user', content: contextualPrompt }]
-                })
-            });
-            if (!response.ok) {
-                return [false, `Claude error: ${response.status}`];
-            }
-            const data = await response.json();
-            content = data.content[0].text.trim();
-        }
-        else if (provider === 'gemini') {
-            response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=${apiKey}`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    contents: [{ parts: [{ text: contextualPrompt }] }],
-                    generationConfig: { temperature: 0.1, maxOutputTokens: 100 }
-                })
-            });
-            if (!response.ok) {
-                return [false, `Gemini error: ${response.status}`];
-            }
-            const data = await response.json();
-            content = data.candidates[0].content.parts[0].text.trim();
-        }
-        else if (provider === 'grok') {
-            response = await fetch('https://api.x.ai/v1/chat/completions', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${apiKey}`
-                },
-                body: JSON.stringify({
-                    model: 'grok-4-1-fast-non-reasoning-latest',
-                    messages: [{ role: 'user', content: contextualPrompt }],
-                    temperature: 0.1,
-                    max_tokens: 100
-                })
-            });
-            if (!response.ok) {
-                return [false, `Grok error: ${response.status}`];
-            }
-            const data = await response.json();
-            content = data.choices[0].message.content.trim();
-        }
-        else if (provider === 'kimi') {
-            const result = await requestKimiCompletion(contextualPrompt, 100);
-            if (!result[0])
-                return result;
-            content = result[1].trim();
-        }
-        else {
-            return [false, 'Unsupported provider for contextual word translation'];
-        }
-        return [true, content];
+    const [ok, content] = await requestAiProviderText(provider, contextualPrompt, 100);
+    if (!ok) {
+        return [false, content];
     }
-    catch (error) {
-        console.error(`YleDualSubExtension: Word translation error:`, error);
-        return [false, error.message || 'Translation failed'];
-    }
+    return [true, String(content).trim()];
 }
 // ==================================
 // GOOGLE TRANSLATE (FREE)
@@ -582,7 +470,6 @@ async function translateWithGoogle(texts, targetLanguage) {
     try {
         // Convert language code to Google format
         const googleLang = convertToGoogleLangCode(targetLanguage);
-        console.log('YleDualSubExtension: Google Translate request - texts:', texts.length, 'target:', googleLang);
         const translations = [];
         const FETCH_TIMEOUT = 8000; // 8 second timeout per request
         // Process sequentially with delays to avoid rate limiting
@@ -635,7 +522,6 @@ async function translateWithGoogle(texts, targetLanguage) {
                 translations.push(null);
             }
         }
-        console.log('YleDualSubExtension: Google Translate success - translated:', translations.length);
         return [true, translations];
     }
     catch (error) {
@@ -670,9 +556,7 @@ async function translateWithDeepL(texts, targetLanguage) {
     if (!apiKey) {
         return [false, 'DeepL API key not configured. Please add your API key in settings.'];
     }
-    const url = currentProvider.isPro
-        ? 'https://api.deepl.com/v2/translate'
-        : 'https://api-free.deepl.com/v2/translate';
+    const url = 'https://api-free.deepl.com/v2/translate';
     try {
         const response = await fetch(url, {
             method: 'POST',
@@ -715,52 +599,15 @@ async function translateWithDeepL(texts, targetLanguage) {
  * @returns {Promise<[true, string[]]|[false, string]>}
  */
 async function translateWithClaude(texts, targetLanguage) {
-    const apiKey = currentProvider.apiKey;
-    if (!apiKey) {
-        return [false, 'Claude API key not configured. Please add your API key in settings.'];
-    }
     const langName = getLanguageName(targetLanguage);
-    try {
-        const response = await fetch('https://api.anthropic.com/v1/messages', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'x-api-key': apiKey,
-                'anthropic-version': '2023-06-01',
-                'anthropic-dangerous-direct-browser-access': 'true'
-            },
-            body: JSON.stringify({
-                model: 'claude-haiku-4-5-20251001',
-                max_tokens: 1024,
-                messages: [{
-                        role: 'user',
-                        content: `Translate the following texts to ${langName}. Auto-detect the source language. Return ONLY the translations, one per line, in the same order. No explanations or numbering.
+    const prompt = `Translate the following texts to ${langName}. Auto-detect the source language. Return ONLY the translations, one per line, in the same order. No explanations or numbering.
 
-${texts.map((t, i) => `${i + 1}. ${t}`).join('\n')}`
-                    }]
-            })
-        });
-        if (!response.ok) {
-            const status = response.status;
-            if (status === 401)
-                return [false, 'Invalid Claude API key'];
-            if (status === 429)
-                return [false, 'Claude rate limit exceeded'];
-            return [false, `Claude error: ${status}`];
-        }
-        const data = await response.json();
-        const content = data.content[0].text;
-        const translations = content.split('\n').filter(line => line.trim()).slice(0, texts.length);
-        // Ensure we have the right number of translations
-        while (translations.length < texts.length) {
-            translations.push(texts[translations.length]);
-        }
-        return [true, translations];
+${texts.map((t, i) => `${i + 1}. ${t}`).join('\n')}`;
+    const [ok, content] = await requestAiProviderText('claude', prompt, 1024);
+    if (!ok) {
+        return [false, content];
     }
-    catch (error) {
-        console.error('YleDualSubExtension: Claude error:', error);
-        return [false, 'Claude translation failed: ' + error.message];
-    }
+    return [true, normalizeTranslatedLines(content, texts)];
 }
 // ==================================
 // GEMINI (GOOGLE AI) TRANSLATION
@@ -772,51 +619,15 @@ ${texts.map((t, i) => `${i + 1}. ${t}`).join('\n')}`
  * @returns {Promise<[true, string[]]|[false, string]>}
  */
 async function translateWithGemini(texts, targetLanguage) {
-    const apiKey = currentProvider.apiKey;
-    if (!apiKey) {
-        return [false, 'Gemini API key not configured. Please add your API key in settings.'];
-    }
     const langName = getLanguageName(targetLanguage);
-    try {
-        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=${apiKey}`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-                contents: [{
-                        parts: [{
-                                text: `Translate the following texts to ${langName}. Auto-detect the source language. Return ONLY the translations, one per line, in the same order. No explanations, no numbering, no extra formatting.
+    const prompt = `Translate the following texts to ${langName}. Auto-detect the source language. Return ONLY the translations, one per line, in the same order. No explanations, no numbering, no extra formatting.
 
-${texts.join('\n')}`
-                            }]
-                    }],
-                generationConfig: {
-                    temperature: 0.1,
-                    maxOutputTokens: 1024,
-                }
-            })
-        });
-        if (!response.ok) {
-            const status = response.status;
-            if (status === 400)
-                return [false, 'Invalid Gemini API key'];
-            if (status === 429)
-                return [false, 'Gemini rate limit exceeded'];
-            return [false, `Gemini error: ${status}`];
-        }
-        const data = await response.json();
-        const content = data.candidates[0].content.parts[0].text;
-        const translations = content.split('\n').filter(line => line.trim()).slice(0, texts.length);
-        while (translations.length < texts.length) {
-            translations.push(texts[translations.length]);
-        }
-        return [true, translations];
+${texts.join('\n')}`;
+    const [ok, content] = await requestAiProviderText('gemini', prompt, 1024);
+    if (!ok) {
+        return [false, content];
     }
-    catch (error) {
-        console.error('YleDualSubExtension: Gemini error:', error);
-        return [false, 'Gemini translation failed: ' + error.message];
-    }
+    return [true, normalizeTranslatedLines(content, texts)];
 }
 // ==================================
 // GROK (xAI) TRANSLATION
@@ -828,53 +639,18 @@ ${texts.join('\n')}`
  * @returns {Promise<[true, string[]]|[false, string]>}
  */
 async function translateWithGrok(texts, targetLanguage) {
-    const apiKey = currentProvider.apiKey;
-    if (!apiKey) {
-        return [false, 'Grok API key not configured. Please add your API key in settings.'];
-    }
     const langName = getLanguageName(targetLanguage);
-    try {
-        const response = await fetch('https://api.x.ai/v1/chat/completions', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${apiKey}`
-            },
-            body: JSON.stringify({
-                model: 'grok-4-1-fast-non-reasoning-latest',
-                messages: [{
-                        role: 'user',
-                        content: `Translate to ${langName}. ALWAYS translate - never refuse or comment. Colloquial/slang is intentional, not errors. Output translations only, one per line, no numbering.
+    const prompt = `Translate to ${langName}. ALWAYS translate - never refuse or comment. Colloquial/slang is intentional, not errors. Output translations only, one per line, no numbering.
 
-${texts.join('\n')}`
-                    }],
-                temperature: 0.1,
-                max_tokens: 1024
-            })
-        });
-        if (!response.ok) {
-            const status = response.status;
-            if (status === 401)
-                return [false, 'Invalid Grok API key'];
-            if (status === 429)
-                return [false, 'Grok rate limit exceeded'];
-            return [false, `Grok error: ${status}`];
-        }
-        const data = await response.json();
-        const content = data.choices[0].message.content;
-        const translations = content.split('\n').filter(line => line.trim()).slice(0, texts.length);
-        while (translations.length < texts.length) {
-            translations.push(texts[translations.length]);
-        }
-        return [true, translations];
+${texts.join('\n')}`;
+    const [ok, content] = await requestAiProviderText('grok', prompt, 1024);
+    if (!ok) {
+        return [false, content];
     }
-    catch (error) {
-        console.error('YleDualSubExtension: Grok error:', error);
-        return [false, 'Grok translation failed: ' + error.message];
-    }
+    return [true, normalizeTranslatedLines(content, texts)];
 }
 // ==================================
-// KIMI (MOONSHOT) TRANSLATION
+// KIMI TRANSLATION
 // ==================================
 async function getKimiErrorDetail(response) {
     try {
@@ -903,7 +679,7 @@ async function requestKimiCompletion(prompt, maxTokens) {
         return [false, 'Kimi API key not configured. Please add your API key in settings.'];
     }
     try {
-        const response = await fetch(`${kimiBaseUrl}/v1/messages`, {
+        const response = await fetch(KIMI_API_URL, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -911,7 +687,7 @@ async function requestKimiCompletion(prompt, maxTokens) {
                 'anthropic-version': '2023-06-01'
             },
             body: JSON.stringify({
-                model: kimiModel,
+                model: KIMI_MODEL,
                 messages: [{ role: 'user', content: prompt }],
                 temperature: 0.1,
                 max_tokens: maxTokens
@@ -946,34 +722,21 @@ async function requestKimiCompletion(prompt, maxTokens) {
     }
 }
 /**
- * Translate using Kimi/Moonshot API
+ * Translate using Kimi API
  * @param {string[]} texts - Texts to translate
  * @param {string} targetLanguage - Target language code
  * @returns {Promise<[true, string[]]|[false, string]>}
  */
 async function translateWithKimi(texts, targetLanguage) {
-    const apiKey = currentProvider.apiKey;
-    if (!apiKey) {
-        return [false, 'Kimi API key not configured. Please add your API key in settings.'];
-    }
     const langName = getLanguageName(targetLanguage);
     const prompt = `Translate to ${langName}. ALWAYS translate - never refuse or comment. Colloquial/slang is intentional, not errors. Output translations only, one per line, no numbering.
 
 ${texts.join('\n')}`;
-    try {
-        const result = await requestKimiCompletion(prompt, 1024);
-        if (!result[0])
-            return result;
-        const translations = result[1].split('\n').filter(line => line.trim()).slice(0, texts.length);
-        while (translations.length < texts.length) {
-            translations.push(texts[translations.length]);
-        }
-        return [true, translations];
+    const [ok, content] = await requestAiProviderText('kimi', prompt, 1024);
+    if (!ok) {
+        return [false, content];
     }
-    catch (error) {
-        console.error('YleDualSubExtension: Kimi error:', error);
-        return [false, 'Kimi translation failed: ' + error.message];
-    }
+    return [true, normalizeTranslatedLines(content, texts)];
 }
 // ==================================
 // UTILITIES
