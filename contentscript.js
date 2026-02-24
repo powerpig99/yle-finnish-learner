@@ -9,8 +9,6 @@ console.info('DualSubExtension: YLE Areena extension loaded');
  * Shared translation map, with key is normalized Finnish text, and value is translated text
  */
 const sharedTranslationMap = new Map();
-/** @type {Map<string, string>} */
-const sharedTranslationErrorMap = new Map();
 /**
  *
  * @param {string} rawSubtitleFinnishText

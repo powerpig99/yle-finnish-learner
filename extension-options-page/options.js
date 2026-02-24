@@ -253,7 +253,6 @@ function attachEventListeners() {
     }
 
     state.translationProvider = nextProvider;
-    updateProviderSelection();
     updateApiKeySection();
 
     chrome.storage.sync
@@ -358,18 +357,14 @@ async function loadSettings() {
     if (typeof result.subtitleFontSize === 'string' && isValidFontSize(result.subtitleFontSize)) {
       state.subtitleFontSize = result.subtitleFontSize;
     }
-
-    updateProviderSelection();
-    updateApiKeySection();
-    updateLanguageSelection();
-    updateSliderValue();
   } catch (error) {
     console.error('Failed to load settings:', error);
-    updateProviderSelection();
-    updateApiKeySection();
-    updateLanguageSelection();
-    updateSliderValue();
   }
+
+  updateProviderSelection();
+  updateApiKeySection();
+  updateLanguageSelection();
+  updateSliderValue();
 }
 
 function cacheDomReferences() {

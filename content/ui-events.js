@@ -233,17 +233,14 @@ document.addEventListener('dscSpeedChange', (e) => {
     const { speed } = e.detail;
     playbackSpeed = speed;
 });
-document.addEventListener('dscSourceLangChange', (e) => {
-    const { language } = e.detail;
+document.addEventListener('dscSourceLangChange', () => {
     // Clear translations when language changes
     sharedTranslationMap.clear();
-    sharedTranslationErrorMap.clear();
 });
 // Handle target language changes without reloading the YLE page.
-document.addEventListener('dscTargetLanguageChanged', (e) => {
+document.addEventListener('dscTargetLanguageChanged', () => {
     // Drop in-memory translations from previous target language.
     sharedTranslationMap.clear();
-    sharedTranslationErrorMap.clear();
     // Drop pending queue items from the previous language context.
     translationQueue.queue.length = 0;
     const originalSubtitlesWrapper = getOriginalSubtitlesWrapper();

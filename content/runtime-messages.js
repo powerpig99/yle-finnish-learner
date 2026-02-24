@@ -10,14 +10,13 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         sendResponse({ success: true });
     }
     if (message.action === 'clearSubtitleCache') {
-        const count = sharedTranslationMap.size + sharedTranslationErrorMap.size;
+        const count = sharedTranslationMap.size;
         sharedTranslationMap.clear();
-        sharedTranslationErrorMap.clear();
         console.info('DualSubExtension: Cleared subtitle translation cache:', count, 'entries');
         sendResponse({ success: true, count });
     }
     if (message.action === 'getSubtitleCacheCount') {
-        const count = sharedTranslationMap.size + sharedTranslationErrorMap.size;
+        const count = sharedTranslationMap.size;
         sendResponse({ success: true, count });
     }
     if (message.action === 'getWordCacheCount') {

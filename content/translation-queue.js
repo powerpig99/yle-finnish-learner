@@ -18,7 +18,7 @@ class TranslationQueue {
     /**
      * Process the translation queue in batches
      * By sending to background.js to handle translation and store results in
-     * sharedTranslationMap or sharedTranslationErrorMap
+     * sharedTranslationMap
      * @returns {Promise<void>}
      */
     async processQueue() {
@@ -93,14 +93,11 @@ const translationQueue = new TranslationQueue();
 // Batch translation state
 let isBatchTranslating = false;
 let batchTranslationProgress = { current: 0, total: 0 };
-function normalizeSubtitleTextForKey(text) {
-    return text.replace(/\s+/g, " ").trim().toLowerCase();
-}
 function buildTimestampKey(startTime, text) {
-    return `${startTime.toFixed(3)}|${normalizeSubtitleTextForKey(text)}`;
+    return `${startTime.toFixed(3)}|${toTranslationKey(text)}`;
 }
 function buildFullSubtitleKey(startTime, endTime, text) {
-    return `${startTime.toFixed(3)}|${endTime.toFixed(3)}|${normalizeSubtitleTextForKey(text)}`;
+    return `${startTime.toFixed(3)}|${endTime.toFixed(3)}|${toTranslationKey(text)}`;
 }
 /**
  * Handle batch translation of all subtitles with context
@@ -146,7 +143,7 @@ async function handleBatchTranslation(subtitles) {
     // Filter out subtitles that are already translated (from cache)
     const untranslatedSubtitles = subtitles.filter(sub => {
         const key = toTranslationKey(sub.text);
-        return !sharedTranslationMap.has(key) && !sharedTranslationErrorMap.has(key);
+        return !sharedTranslationMap.has(key);
     });
     if (untranslatedSubtitles.length === 0) {
         console.info("YleDualSubExtension: All subtitles already cached, no batch translation needed");
@@ -216,8 +213,6 @@ async function handleBatchTranslation(subtitles) {
         batchTranslationProgress.current += chunk.length;
         updateBatchTranslationIndicator();
     }
-    // Sort subtitle timestamps after batch population
-    subtitleTimestamps.sort((a, b) => a.time - b.time);
     isBatchTranslating = false;
     hideBatchTranslationIndicator();
     console.info("YleDualSubExtension: Batch translation completed");

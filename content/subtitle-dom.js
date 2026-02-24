@@ -234,8 +234,7 @@ function addContentToDisplayedSubtitlesWrapper(displayedSubtitlesWrapper, origin
     // Skip translation if source and target languages are the same
     if (dualSubEnabled && shouldTranslate()) {
         const translationKey = toTranslationKey(finnishText);
-        let targetLanguageText = sharedTranslationMap.get(translationKey) ||
-            sharedTranslationErrorMap.get(translationKey);
+        let targetLanguageText = sharedTranslationMap.get(translationKey);
         // Generate unique ID for this translation span
         const spanId = `translation-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
         // If no translation yet, show "Translating..." and set up a retry mechanism
@@ -248,7 +247,7 @@ function addContentToDisplayedSubtitlesWrapper(displayedSubtitlesWrapper, origin
             const startTime = Date.now();
             // Set up a periodic check to update the translation when it arrives
             const checkTranslation = setInterval(() => {
-                const translation = sharedTranslationMap.get(translationKey) || sharedTranslationErrorMap.get(translationKey);
+                const translation = sharedTranslationMap.get(translationKey);
                 // Find the specific span by ID to avoid updating wrong subtitle
                 const translationSpan = document.getElementById(spanId);
                 if (!translationSpan) {
