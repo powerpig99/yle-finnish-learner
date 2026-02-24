@@ -7,8 +7,6 @@
  * - Error and success messages
  */
 
-/* global AudioFilters */
-
 const AudioDownloadUI = {
   /**
    * Currently active modal element

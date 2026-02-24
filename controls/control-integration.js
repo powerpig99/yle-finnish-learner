@@ -4,8 +4,6 @@
  * Bridges the ControlPanel with the existing contentscript.js functionality for YLE Areena.
  */
 
-/* global ControlPanel, ControlActions, ControlKeyboard, AudioFilters, AudioRecorder, AudioEncoder, AudioDownloadUI, normalizeLanguageCode, isSameLanguage, getEffectiveTargetLanguage, loadExtensionEnabledFromStorage, saveExtensionEnabledToStorage, isExtensionContextValid, safeStorageGet, safeStorageSet, safeSendMessage, showExtensionInvalidatedToast */
-
 /**
  * Integration manager for the YLE control panel
  */

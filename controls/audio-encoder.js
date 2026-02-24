@@ -5,8 +5,6 @@
  * Used for the audio download feature.
  */
 
-/* global lamejs */
-
 const AudioEncoder = {
   /**
    * Default encoding options

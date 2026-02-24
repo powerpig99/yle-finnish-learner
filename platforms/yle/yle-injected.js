@@ -1030,7 +1030,50 @@ const LanguageDetector = {
 const decoder = new TextDecoder("utf-8");
 const vttParser = new WebVTTParser();
 
-(function (_xhr) {
+function collectSubtitlesFromVttText(vttText) {
+    const vttFileTree = vttParser.parse(vttText);
+    const subtitles = [];
+
+    for (const cue of vttFileTree.cues) {
+        if (!cue || typeof cue.text !== "string") {
+            continue;
+        }
+        const subtitle = cue.text.replace(/\n/g, " ").replace(/\s+/g, " ").trim();
+        if (subtitle.length > 0) {
+            subtitles.push({
+                text: subtitle,
+                startTime: cue.startTime,
+                endTime: cue.endTime
+            });
+        }
+    }
+
+    return subtitles;
+}
+
+function dispatchBatchTranslation(subtitles, vttUrl, source = '') {
+    if (subtitles.length === 0) {
+        return;
+    }
+
+    LanguageDetector.detectFromBatch(subtitles);
+
+    const batchEvent = new CustomEvent("sendBatchTranslationEvent", {
+        bubbles: true,
+        cancelable: true,
+        detail: {
+            subtitles,
+            vttUrl,
+            detectedLanguage: LanguageDetector._detected
+        }
+    });
+    document.dispatchEvent(batchEvent);
+
+    const sourcePrefix = source ? `[${source}] ` : '';
+    console.info(`YleDualSubExtension: ${sourcePrefix}Sent batch of ${subtitles.length} subtitles for translation (lang: ${LanguageDetector._detected || 'unknown'})`);
+}
+
+(function () {
     const XHR = XMLHttpRequest.prototype;
 
     const open = XHR.open;
@@ -1057,46 +1100,8 @@ const vttParser = new WebVTTParser();
 
             try {
                 const fullVttFileResponseText = decoder.decode(this.response);
-
-                const vttFileTree = vttParser.parse(fullVttFileResponseText);
-
-                // Collect all subtitles with timing for batch translation
-                const allSubtitles = [];
-
-                for (const cue of vttFileTree.cues) {
-                    if (cue && typeof cue.text === "string") {
-                        const subtitle = cue.text.replace(/\n/g, " ").replace(/\s+/g, " ").trim();
-                        if (subtitle.length > 0) {
-                            allSubtitles.push({
-                                text: subtitle,
-                                startTime: cue.startTime,
-                                endTime: cue.endTime
-                            });
-                        }
-                    }
-                }
-
-                // Send batch event FIRST with all subtitles for contextual translation
-                // This allows the batch handler to set isBatchTranslating flag before individual events
-                if (allSubtitles.length > 0) {
-                    // Detect language from subtitles
-                    LanguageDetector.detectFromBatch(allSubtitles);
-
-                    const batchEvent = new CustomEvent("sendBatchTranslationEvent", {
-                        bubbles: true,
-                        cancelable: true,
-                        detail: {
-                            subtitles: allSubtitles,
-                            vttUrl: this._url,
-                            detectedLanguage: LanguageDetector._detected
-                        }
-                    });
-                    document.dispatchEvent(batchEvent);
-                    console.info(`YleDualSubExtension: Sent batch of ${allSubtitles.length} subtitles for translation (lang: ${LanguageDetector._detected || 'unknown'})`);
-                }
-
-                // Individual events are no longer needed since batch handles all subtitles
-                // Keeping this as fallback only if batch somehow fails
+                const allSubtitles = collectSubtitlesFromVttText(fullVttFileResponseText);
+                dispatchBatchTranslation(allSubtitles, this._url);
             } catch (e) {
                 console.error("YleDualSubExtension: Failed to parse VTT file:", e);
             }
@@ -1104,13 +1109,13 @@ const vttParser = new WebVTTParser();
 
         return send.apply(this, arguments);
     };
-})(XMLHttpRequest);
+})();
 
 // Also intercept fetch API for VTT files (modern video players often use fetch)
-(function() {
+(function () {
     const originalFetch = window.fetch;
 
-    window.fetch = async function(input, init) {
+    window.fetch = async function (input) {
         const response = await originalFetch.apply(this, arguments);
 
         // Get the URL from the input
@@ -1127,42 +1132,8 @@ const vttParser = new WebVTTParser();
                 // Clone the response so we can read it without consuming the original
                 const clonedResponse = response.clone();
                 const text = await clonedResponse.text();
-
-                const vttFileTree = vttParser.parse(text);
-
-                // Collect all subtitles with timing for batch translation
-                const allSubtitles = [];
-
-                for (const cue of vttFileTree.cues) {
-                    if (cue && typeof cue.text === "string") {
-                        const subtitle = cue.text.replace(/\n/g, " ").replace(/\s+/g, " ").trim();
-                        if (subtitle.length > 0) {
-                            allSubtitles.push({
-                                text: subtitle,
-                                startTime: cue.startTime,
-                                endTime: cue.endTime
-                            });
-                        }
-                    }
-                }
-
-                // Send batch event with all subtitles for contextual translation
-                if (allSubtitles.length > 0) {
-                    // Detect language from subtitles
-                    LanguageDetector.detectFromBatch(allSubtitles);
-
-                    const batchEvent = new CustomEvent("sendBatchTranslationEvent", {
-                        bubbles: true,
-                        cancelable: true,
-                        detail: {
-                            subtitles: allSubtitles,
-                            vttUrl: url,
-                            detectedLanguage: LanguageDetector._detected
-                        }
-                    });
-                    document.dispatchEvent(batchEvent);
-                    console.info(`YleDualSubExtension: [fetch] Sent batch of ${allSubtitles.length} subtitles for translation (lang: ${LanguageDetector._detected || 'unknown'})`);
-                }
+                const allSubtitles = collectSubtitlesFromVttText(text);
+                dispatchBatchTranslation(allSubtitles, url, 'fetch');
             } catch (e) {
                 console.error("YleDualSubExtension: [fetch] Failed to parse VTT file:", e);
             }

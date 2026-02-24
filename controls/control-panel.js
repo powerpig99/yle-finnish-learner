@@ -5,8 +5,6 @@
  * Uses ControlIcons, ControlActions, and ControlKeyboard modules.
  */
 
-/* global ControlIcons, ControlActions, ControlKeyboard */
-
 class ControlPanel {
   /**
    * Create a control panel

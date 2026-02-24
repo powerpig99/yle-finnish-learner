@@ -6,8 +6,6 @@
  * Records the entire playback and extracts speech segments in post-processing.
  */
 
-/* global AudioFilters, AudioEncoder */
-
 const ScreenRecorder = {
   /**
    * Recording state

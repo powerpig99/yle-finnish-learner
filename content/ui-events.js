@@ -195,7 +195,6 @@ function renderCurrentSubtitleImmediately(originalSubtitlesWrapper) {
 }
 // SECTION: UNIFIED CONTROL PANEL EVENT LISTENERS
 // ==================================
-/* global ControlIntegration, ControlPanel, ControlActions, ControlKeyboard */
 // Listen for unified control panel events
 document.addEventListener('dscDualSubToggle', (e) => {
     const { enabled } = e.detail;

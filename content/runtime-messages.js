@@ -51,25 +51,10 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
                 if (!globalDatabaseInstance) {
                     globalDatabaseInstance = await openDatabase();
                 }
-                const transaction = globalDatabaseInstance.transaction(['WordTranslations'], 'readwrite');
-                const store = transaction.objectStore('WordTranslations');
-                const countRequest = store.count();
-                countRequest.onsuccess = () => {
-                    const count = countRequest.result;
-                    const clearRequest = store.clear();
-                    clearRequest.onsuccess = () => {
-                        // Also clear in-memory cache
-                        wordTranslationCache.clear();
-                        console.info('DualSubExtension: Cleared word translation cache:', count, 'entries');
-                        sendResponse({ success: true, count });
-                    };
-                    clearRequest.onerror = () => {
-                        sendResponse({ success: false, count: 0 });
-                    };
-                };
-                countRequest.onerror = () => {
-                    sendResponse({ success: false, count: 0 });
-                };
+                const count = await clearAllWordTranslations(globalDatabaseInstance);
+                wordTranslationCache.clear();
+                console.info('DualSubExtension: Cleared word translation cache:', count, 'entries');
+                sendResponse({ success: true, count });
             }
             catch (e) {
                 console.error('DualSubExtension: Error clearing word cache:', e);

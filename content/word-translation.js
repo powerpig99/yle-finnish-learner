@@ -347,24 +347,6 @@ function isInvalidCachedTranslation(translation) {
     return badPatterns.some(pattern => lowerTranslation.includes(pattern));
 }
 /**
- * Clear all word translations from cache (call from console: clearWordCache())
- */
-async function clearWordCache() {
-    if (globalDatabaseInstance) {
-        const count = await clearAllWordTranslations(globalDatabaseInstance);
-        wordTranslationCache.clear();
-        console.info(`YleDualSubExtension: Cleared ${count} word translations from IndexedDB and in-memory cache`);
-        return count;
-    }
-    else {
-        wordTranslationCache.clear();
-        console.info('YleDualSubExtension: Cleared in-memory word cache (IndexedDB not available)');
-        return 0;
-    }
-}
-// Expose clearWordCache to window for debugging
-window.clearWordCache = clearWordCache;
-/**
  * Translate a single word using Wiktionary, with LLM fallback using context
  * @param {string} word - The word to translate
  * @param {{current: string, before: string[], after: string[]}} context - Subtitle context

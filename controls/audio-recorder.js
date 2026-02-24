@@ -6,8 +6,6 @@
  * Uses Web Audio API with MediaElementSource for better compatibility with streaming players.
  */
 
-/* global AudioFilters, AudioEncoder */
-
 const AudioRecorder = {
   /**
    * Recording state

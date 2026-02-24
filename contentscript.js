@@ -5,7 +5,6 @@ console.info('DualSubExtension: YLE Areena extension loaded');
 // ==================================
 // SECTION 1: STATE & INITIALIZATION
 // ==================================
-/* global openDatabase, saveSubtitlesBatch, loadSubtitlesByMovieName, upsertMovieMetadata, cleanupOldMovieData */
 /** @type {Map<string, string>}
  * Shared translation map, with key is normalized Finnish text, and value is translated text
  */

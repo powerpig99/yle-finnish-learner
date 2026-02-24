@@ -1,4 +1,3 @@
-/* global importScripts */
 importScripts('utils.js');
 let currentProvider = { provider: 'google' }; // Default to free Google Translate
 const KIMI_DEFAULT_BASE_URL = 'https://api.kimi.com/coding';
