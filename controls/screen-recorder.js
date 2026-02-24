@@ -265,11 +265,12 @@ const ScreenRecorder = {
       if (onProgress) onProgress(0, 100, 60, 'encoding');
 
       // Encode to MP3
-      const mp3Blob = await AudioEncoder.encodeToMP3(finalBuffer, {
-        bitRate: 128,
-        onProgress: (percent) => {
-          if (onProgress) onProgress(0, 100, 60 + percent * 0.4, 'encoding');
-        }
+      if (!window.DSCAudioEncoder || typeof window.DSCAudioEncoder.encodeToMP3 !== 'function') {
+        throw new Error('MP3 encoder unavailable');
+      }
+
+      const mp3Blob = await window.DSCAudioEncoder.encodeToMP3(finalBuffer, (percent) => {
+        if (onProgress) onProgress(0, 100, 60 + percent * 0.4, 'encoding');
       });
 
       audioContext.close();

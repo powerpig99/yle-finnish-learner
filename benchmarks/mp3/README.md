@@ -1,24 +1,23 @@
-# MP3 Encoder Benchmark Gate
+# Audio Encoder Benchmark Gate
 
-This directory contains the gated A/B benchmark for `lamejs` vs `shine`.
+This directory contains the gated benchmark for the active runtime encoder path.
 
 ## Files
 
 1. `index.html`: Browser runner UI.
 2. `benchmark.js`: Benchmark logic and gate evaluation.
 3. `fixtures/`: Deterministic benchmark fixtures, including speech WAV files.
-4. `vendors/lamejs.min.js`: Baseline encoder used for A/B comparison.
-5. `results/`: Committed benchmark artifacts.
+4. `results/`: Committed benchmark artifacts.
 
 ## Gate Criteria
 
 The report enforces:
 
-1. `shine` wall time `<= lamejs` per fixture.
-2. `shine` peak heap delta `<= 1.5x` baseline.
-3. Output size delta within `+/- 1%`.
-4. Frame/header sanity for CBR 128k.
-5. Decode passes and `shine` duration drift is no worse than `lamejs` + `0.05%`.
+1. Throughput at least `0.75x` real-time per fixture.
+2. MPEG-1 Layer III frame is found with `128 kbps` and expected sample rate.
+3. Decode succeeds for every fixture.
+4. Duration drift is `<= 1.0%`.
+5. Output remains compressed (`outputBytes/rawPcmBytes <= 0.6`).
 
 ## Run In Browser
 

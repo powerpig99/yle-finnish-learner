@@ -1,50 +1,28 @@
 /**
  * Audio Encoder Module
  *
- * Handles encoding audio data to MP3 format using shine-mp3.
+ * Handles encoding audio data to MP3 format using the in-repo MP3 encoder.
  * Used for the audio download feature.
  */
 
 const AudioEncoder = {
   /**
-   * Default encoding options
-   */
-  DEFAULT_OPTIONS: {
-    bitRate: 128 // kbps
-  },
-
-  _isShineAvailable() {
-    return typeof shineLamejs !== 'undefined' && typeof shineLamejs.Mp3Encoder === 'function';
-  },
-
-  async _ensureShineInitialized() {
-    if (!this._isShineAvailable()) {
-      throw new Error('shine-mp3 library not loaded');
-    }
-
-    if (shineLamejs.initialized && typeof shineLamejs.initialized.then === 'function') {
-      await shineLamejs.initialized;
-    }
-  },
-
-  /**
    * Encode an AudioBuffer to MP3
    * @param {AudioBuffer} audioBuffer - The audio data to encode
-   * @param {Object} [options] - Encoding options
-   * @param {number} [options.bitRate=128] - Bitrate in kbps
    * @param {function} [onProgress] - Progress callback (0-1)
    * @returns {Promise<Blob>} - MP3 file as Blob
    */
-  async encodeToMP3(audioBuffer, options = {}, onProgress = null) {
-    await this._ensureShineInitialized();
+  async encodeToMP3(audioBuffer, onProgress = null) {
+    if (typeof OwnedMp3 === 'undefined' || typeof OwnedMp3.Mp3Encoder !== 'function') {
+      throw new Error('mp3-encoder library not loaded');
+    }
 
-    const opts = { ...this.DEFAULT_OPTIONS, ...options };
     const channels = audioBuffer.numberOfChannels;
     const sampleRate = audioBuffer.sampleRate;
     const encoderChannels = channels === 1 ? 1 : 2;
 
     // Create encoder
-    const mp3encoder = new shineLamejs.Mp3Encoder(encoderChannels, sampleRate, opts.bitRate);
+    const mp3encoder = new OwnedMp3.Mp3Encoder(encoderChannels, sampleRate);
 
     const mp3Data = [];
     const samplesPerFrame = 1152; // Standard MP3 frame size
@@ -131,4 +109,4 @@ const AudioEncoder = {
   }
 };
 
-window.AudioEncoder = AudioEncoder;
+window.DSCAudioEncoder = AudioEncoder;

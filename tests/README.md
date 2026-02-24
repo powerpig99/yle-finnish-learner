@@ -1,6 +1,6 @@
 # Testing Guide
 
-This project uses Node's built-in test runner with `fake-indexeddb`.
+This project uses Node's built-in test runner with an in-tree IndexedDB shim.
 
 ## Setup
 
@@ -24,7 +24,7 @@ node --test tests/unit/database.test.js
 ## Test structure
 
 - `tests/unit/database.test.js`: Database tests for IndexedDB helpers and cleanup logic.
-- `fake-indexeddb/auto`: Provides IndexedDB in Node.
+- `tests/support/indexeddb-shim.js`: Minimal IndexedDB API shim for Node.
 
 ## Notes
 
@@ -32,14 +32,6 @@ node --test tests/unit/database.test.js
 - Tests create a fresh DB and delete it after each case (`YleDualSubCache`).
 
 ## Troubleshooting
-
-### Cannot find module `fake-indexeddb`
-
-Install dependencies again:
-
-```bash
-npm install
-```
 
 ### Database state leaks between tests
 

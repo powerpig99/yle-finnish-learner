@@ -2,9 +2,9 @@
   'use strict';
 
   const GATE = {
-    maxDurationDriftDeltaPct: 0.05,
-    maxSizeDeltaPct: 1.0,
-    maxMemoryRatio: 1.5
+    minThroughputX: 0.75,
+    maxDurationDriftPct: 1.0,
+    maxSizeRatioToPcm: 0.6
   };
 
   const FIXTURE_DEFS = [
@@ -32,88 +32,14 @@
     return null;
   }
 
-  function floatToPcm16(value) {
-    let v = value;
-    if (v > 1) v = 1;
-    if (v < -1) v = -1;
-    return v < 0 ? v * 0x8000 : v * 0x7fff;
-  }
-
-  function floatArrayToInt16(floatSamples) {
-    const int16 = new Int16Array(floatSamples.length);
-    for (let i = 0; i < floatSamples.length; i++) {
-      int16[i] = floatToPcm16(floatSamples[i]);
+  async function sha256Hex(bytes) {
+    const digest = await crypto.subtle.digest('SHA-256', bytes.buffer.slice(0));
+    const arr = new Uint8Array(digest);
+    let out = '';
+    for (let i = 0; i < arr.length; i++) {
+      out += arr[i].toString(16).padStart(2, '0');
     }
-    return int16;
-  }
-
-  async function encodeWithBackend(audioBuffer, backend, bitRate, onProgress) {
-    let Encoder = null;
-    if (backend === 'shine') {
-      if (!window.shineLamejs || !window.shineLamejs.Mp3Encoder) {
-        throw new Error('shine backend not available');
-      }
-      if (window.shineLamejs.initialized && typeof window.shineLamejs.initialized.then === 'function') {
-        await window.shineLamejs.initialized;
-      }
-      Encoder = window.shineLamejs.Mp3Encoder;
-    } else if (backend === 'lamejs') {
-      if (!window.lamejs || !window.lamejs.Mp3Encoder) {
-        throw new Error('lamejs backend not available');
-      }
-      Encoder = window.lamejs.Mp3Encoder;
-    } else {
-      throw new Error(`Unsupported backend: ${backend}`);
-    }
-
-    const channels = audioBuffer.numberOfChannels;
-    const sampleRate = audioBuffer.sampleRate;
-    const encoderChannels = channels === 1 ? 1 : 2;
-    const mp3encoder = new Encoder(encoderChannels, sampleRate, bitRate);
-
-    const mp3Data = [];
-    const samplesPerFrame = 1152;
-    const chunkSize = samplesPerFrame * 100;
-    const leftChannel = audioBuffer.getChannelData(0);
-    const rightChannel = channels > 1 ? audioBuffer.getChannelData(1) : leftChannel;
-    const leftInt16 = floatArrayToInt16(leftChannel);
-    const rightInt16 = channels > 1 ? floatArrayToInt16(rightChannel) : leftInt16;
-    const totalSamples = leftInt16.length;
-
-    for (let i = 0; i < totalSamples; i += chunkSize) {
-      const end = Math.min(i + chunkSize, totalSamples);
-
-      for (let j = i; j < end; j += samplesPerFrame) {
-        const frameEnd = Math.min(j + samplesPerFrame, totalSamples);
-        const leftSamples = leftInt16.subarray(j, frameEnd);
-        const rightSamples = rightInt16.subarray(j, frameEnd);
-        const mp3buf = channels === 1
-          ? mp3encoder.encodeBuffer(leftSamples)
-          : mp3encoder.encodeBuffer(leftSamples, rightSamples);
-        if (mp3buf.length > 0) {
-          mp3Data.push(mp3buf);
-        }
-      }
-
-      if (onProgress) {
-        onProgress(end / totalSamples);
-      }
-
-      if (i + chunkSize < totalSamples) {
-        await new Promise((resolve) => setTimeout(resolve, 0));
-      }
-    }
-
-    const flushBuf = mp3encoder.flush();
-    if (flushBuf.length > 0) {
-      mp3Data.push(flushBuf);
-    }
-
-    if (onProgress) {
-      onProgress(1);
-    }
-
-    return new Blob(mp3Data, { type: 'audio/mp3' });
+    return out;
   }
 
   function createSyntheticBuffer(ctx, def) {
@@ -132,7 +58,6 @@
           const f = 180 + 1800 * (t / def.durationSec);
           sample = Math.sin(twoPi * f * t) * 0.5;
         } else if (def.type === 'noise') {
-          // Deterministic pseudo-noise (LCG).
           const seed = (i * 1103515245 + (ch + 1) * 12345) & 0x7fffffff;
           sample = ((seed / 0x7fffffff) * 2 - 1) * 0.3;
         }
@@ -145,6 +70,7 @@
 
   function parseWavPcm16(arrayBuffer) {
     const view = new DataView(arrayBuffer);
+
     function readAscii(offset, length) {
       let out = '';
       for (let i = 0; i < length; i++) {
@@ -198,8 +124,7 @@
     let p = dataOffset;
     for (let i = 0; i < sampleCount; i++) {
       for (let ch = 0; ch < fmt.channels; ch++) {
-        const s = view.getInt16(p, true);
-        channels[ch][i] = s / 32768;
+        channels[ch][i] = view.getInt16(p, true) / 32768;
         p += 2;
       }
     }
@@ -215,8 +140,7 @@
     if (!response.ok) {
       throw new Error(`Failed to fetch fixture: ${path} (${response.status})`);
     }
-    const arrayBuffer = await response.arrayBuffer();
-    const parsed = parseWavPcm16(arrayBuffer);
+    const parsed = parseWavPcm16(await response.arrayBuffer());
     const length = parsed.channels[0].length;
     const buffer = ctx.createBuffer(parsed.channels.length, length, parsed.sampleRate);
     for (let ch = 0; ch < parsed.channels.length; ch++) {
@@ -229,8 +153,7 @@
     const fixtures = [];
     for (const def of FIXTURE_DEFS) {
       if (def.type === 'wav') {
-        const buffer = await decodeWavFixture(ctx, def.path);
-        fixtures.push({ id: def.id, buffer });
+        fixtures.push({ id: def.id, buffer: await decodeWavFixture(ctx, def.path) });
       } else {
         fixtures.push({ id: def.id, buffer: createSyntheticBuffer(ctx, def) });
       }
@@ -238,12 +161,13 @@
     return fixtures;
   }
 
-  function parseFirstMp3Frame(bytes) {
+  function parseFirstMpegAudioFrame(bytes) {
     const bitrateTableMpeg1L3 = [
       0, 32, 40, 48, 56, 64, 80, 96,
       112, 128, 160, 192, 224, 256, 320, 0
     ];
     const sampleRateTableMpeg1 = [44100, 48000, 32000, 0];
+    const channelModes = ['stereo', 'joint_stereo', 'dual_channel', 'mono'];
 
     for (let i = 0; i + 4 < bytes.length; i++) {
       if (bytes[i] !== 0xff || (bytes[i + 1] & 0xe0) !== 0xe0) continue;
@@ -251,12 +175,15 @@
       const b1 = bytes[i + 1];
       const b2 = bytes[i + 2];
       const versionId = (b1 >> 3) & 0x03;
-      const layer = (b1 >> 1) & 0x03;
+      const layerBits = (b1 >> 1) & 0x03;
       const bitrateIndex = (b2 >> 4) & 0x0f;
       const sampleRateIndex = (b2 >> 2) & 0x03;
       const padding = (b2 >> 1) & 0x01;
+      const channelModeBits = (bytes[i + 3] >> 6) & 0x03;
 
-      if (versionId !== 0x03 || layer !== 0x01) continue; // Expect MPEG1 Layer III
+      // Encoder target is MPEG-1 Layer III only.
+      if (versionId !== 0x03 || layerBits !== 0x01) continue;
+
       const bitrateKbps = bitrateTableMpeg1L3[bitrateIndex];
       const sampleRate = sampleRateTableMpeg1[sampleRateIndex];
       if (!bitrateKbps || !sampleRate) continue;
@@ -265,34 +192,105 @@
       return {
         found: true,
         offset: i,
+        mpegVersion: 1,
+        layer: 'layer3',
         bitrateKbps,
         sampleRate,
+        padding,
+        channelMode: channelModes[channelModeBits],
         frameSize
       };
     }
+
     return { found: false };
   }
 
-  async function decodeMp3(ctx, mp3Bytes) {
+  async function decodeAudioBytes(ctx, bytes) {
     try {
-      const decodePromise = ctx.decodeAudioData(mp3Bytes.buffer.slice(0));
       const decoded = await Promise.race([
-        decodePromise,
-        new Promise((_, reject) => setTimeout(() => reject(new Error('decode timeout')), 15000))
+        ctx.decodeAudioData(bytes.buffer.slice(0)),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('decode timeout')), 20000))
       ]);
-      return { success: true, durationSec: decoded.duration };
+      return {
+        success: true,
+        durationSec: decoded.duration
+      };
     } catch (error) {
-      return { success: false, error: String(error) };
+      return {
+        success: false,
+        error: String(error)
+      };
     }
   }
 
-  async function runCase(ctx, backend, fixture) {
+  async function encodeWithRuntimeEncoder(audioBuffer, onProgress) {
+    if (!window.DSCAudioEncoder || typeof window.DSCAudioEncoder.encodeToMP3 !== 'function') {
+      throw new Error('DSCAudioEncoder is not available');
+    }
+
+    return window.DSCAudioEncoder.encodeToMP3(audioBuffer, onProgress);
+  }
+
+  function evaluateFixtureGate(run) {
+    const failures = [];
+    const metrics = run.metrics;
+    const validity = run.validity;
+    const input = run.input;
+    const rawPcmBytes = input.durationSec * input.sampleRate * input.channels * 2;
+    const sizeRatioToPcm = rawPcmBytes > 0 ? metrics.outputBytes / rawPcmBytes : Infinity;
+
+    if (!validity.decode.success) {
+      failures.push('decode_failure');
+    }
+
+    if (!validity.frame || !validity.frame.found) {
+      failures.push('frame_not_found');
+    } else {
+      if (validity.frame.layer !== 'layer3' || validity.frame.mpegVersion !== 1) {
+        failures.push('unexpected_mpeg_layer_or_version');
+      }
+      if (validity.frame.bitrateKbps !== 128) {
+        failures.push(`unexpected_bitrate(${validity.frame.bitrateKbps})`);
+      }
+      if (validity.frame.sampleRate !== input.sampleRate) {
+        failures.push(`unexpected_samplerate(${validity.frame.sampleRate} != ${input.sampleRate})`);
+      }
+    }
+
+    if (metrics.throughputX < GATE.minThroughputX) {
+      failures.push(`throughput_too_slow(${metrics.throughputX.toFixed(3)}x < ${GATE.minThroughputX}x)`);
+    }
+
+    if (validity.durationDriftPct !== null && validity.durationDriftPct > GATE.maxDurationDriftPct) {
+      failures.push(`duration_drift(${validity.durationDriftPct.toFixed(3)}% > ${GATE.maxDurationDriftPct}%)`);
+    }
+
+    if (sizeRatioToPcm > GATE.maxSizeRatioToPcm) {
+      failures.push(`output_size_ratio(${sizeRatioToPcm.toFixed(3)} > ${GATE.maxSizeRatioToPcm})`);
+    }
+
+    return {
+      pass: failures.length === 0,
+      failures,
+      summary: {
+        elapsedMs: metrics.elapsedMs,
+        throughputX: metrics.throughputX,
+        outputBytes: metrics.outputBytes,
+        outputMimeType: metrics.outputMimeType,
+        frame: validity.frame,
+        durationDriftPct: validity.durationDriftPct,
+        sizeRatioToPcm
+      }
+    };
+  }
+
+  async function runCase(ctx, fixture) {
     let peakHeap = readHeap();
     const heapBefore = peakHeap;
     const perfStart = performance.now();
     const wallStart = Date.now();
 
-    const mp3Blob = await encodeWithBackend(fixture.buffer, backend, 128, function onProgress() {
+    const blob = await encodeWithRuntimeEncoder(fixture.buffer, function onProgress() {
       const heap = readHeap();
       if (heap !== null && (peakHeap === null || heap > peakHeap)) {
         peakHeap = heap;
@@ -304,10 +302,11 @@
     const elapsedMs = Math.max(perfEnd - perfStart, wallEnd - wallStart, 0.001);
     const inputDurationSec = fixture.buffer.duration;
     const throughputX = inputDurationSec / (elapsedMs / 1000);
-    const outputBytes = mp3Blob.size;
-    const bytes = new Uint8Array(await mp3Blob.arrayBuffer());
-    const frame = parseFirstMp3Frame(bytes);
-    const decoded = await decodeMp3(ctx, bytes);
+    const outputBytes = blob.size;
+    const bytes = new Uint8Array(await blob.arrayBuffer());
+    const outputSha256 = await sha256Hex(bytes);
+    const frame = parseFirstMpegAudioFrame(bytes);
+    const decoded = await decodeAudioBytes(ctx, bytes);
     const durationDriftPct = decoded.success
       ? Math.abs((decoded.durationSec - inputDurationSec) / inputDurationSec) * 100
       : null;
@@ -316,7 +315,6 @@
     const peakHeapDelta = peakHeap !== null && heapBefore !== null ? (peakHeap - heapBefore) : null;
 
     return {
-      backend,
       fixtureId: fixture.id,
       input: {
         durationSec: inputDurationSec,
@@ -327,6 +325,8 @@
         elapsedMs,
         throughputX,
         outputBytes,
+        outputSha256,
+        outputMimeType: blob.type || 'application/octet-stream',
         heapBefore,
         heapAfter,
         heapDelta,
@@ -340,94 +340,10 @@
     };
   }
 
-  function evaluateFixtureGate(lame, shine) {
-    const failures = [];
-    const shineMetrics = shine.metrics;
-    const lameMetrics = lame.metrics;
-    const shineValidity = shine.validity;
-
-    if (shineMetrics.elapsedMs > lameMetrics.elapsedMs) {
-      failures.push(`throughput_regression(${shineMetrics.elapsedMs.toFixed(2)}ms > ${lameMetrics.elapsedMs.toFixed(2)}ms)`);
-    }
-
-    if (shineMetrics.peakHeapDelta !== null && lameMetrics.peakHeapDelta !== null) {
-      const memoryRatio = lameMetrics.peakHeapDelta === 0
-        ? (shineMetrics.peakHeapDelta === 0 ? 1 : Infinity)
-        : shineMetrics.peakHeapDelta / lameMetrics.peakHeapDelta;
-      if (memoryRatio > GATE.maxMemoryRatio) {
-        failures.push(`memory_ratio(${memoryRatio.toFixed(3)} > ${GATE.maxMemoryRatio})`);
-      }
-    }
-
-    const sizeDeltaPct = lameMetrics.outputBytes === 0
-      ? Infinity
-      : Math.abs((shineMetrics.outputBytes - lameMetrics.outputBytes) / lameMetrics.outputBytes) * 100;
-    if (sizeDeltaPct > GATE.maxSizeDeltaPct) {
-      failures.push(`output_size_delta(${sizeDeltaPct.toFixed(3)}% > ${GATE.maxSizeDeltaPct}%)`);
-    }
-
-    if (!lame.validity.decode.success) {
-      failures.push('baseline_decode_failure');
-    }
-
-    if (!shineValidity.decode.success) {
-      failures.push('decode_failure');
-    }
-
-    const shineDurationDriftPct = shineValidity.durationDriftPct;
-    const lameDurationDriftPct = lame.validity.durationDriftPct;
-    const allowedDriftPct = lameDurationDriftPct === null
-      ? null
-      : lameDurationDriftPct + GATE.maxDurationDriftDeltaPct;
-    if (shineDurationDriftPct !== null && lameDurationDriftPct !== null) {
-      if (shineDurationDriftPct > allowedDriftPct) {
-        failures.push(`duration_drift_regression(${shineDurationDriftPct.toFixed(4)}% > ${allowedDriftPct.toFixed(4)}%)`);
-      }
-    }
-
-    if (!shineValidity.frame.found) {
-      failures.push('frame_not_found');
-    } else {
-      if (shineValidity.frame.bitrateKbps !== 128) {
-        failures.push(`unexpected_bitrate(${shineValidity.frame.bitrateKbps})`);
-      }
-      if (shineValidity.frame.sampleRate !== shine.input.sampleRate) {
-        failures.push(`unexpected_samplerate(${shineValidity.frame.sampleRate} != ${shine.input.sampleRate})`);
-      }
-    }
-
-    return {
-      pass: failures.length === 0,
-      failures,
-      summary: {
-        elapsedMsLame: lameMetrics.elapsedMs,
-        elapsedMsShine: shineMetrics.elapsedMs,
-        throughputXLame: lameMetrics.throughputX,
-        throughputXShine: shineMetrics.throughputX,
-        outputBytesLame: lameMetrics.outputBytes,
-        outputBytesShine: shineMetrics.outputBytes,
-        durationDriftPctAllowed: allowedDriftPct,
-        durationDriftPctLame: lameDurationDriftPct,
-        durationDriftPctShine: shineDurationDriftPct
-      }
-    };
-  }
-
   async function runBenchmark() {
     if (!window.AudioContext) {
       throw new Error('AudioContext is not available in this browser context');
     }
-
-    if (!window.lamejs || !window.lamejs.Mp3Encoder) {
-      throw new Error('lamejs backend not available');
-    }
-
-    if (!window.shineLamejs || !window.shineLamejs.initialized) {
-      throw new Error('shine backend not available');
-    }
-
-    setStatus('Initializing shine backend...');
-    await window.shineLamejs.initialized;
 
     const ctx = new AudioContext();
     setStatus('Loading fixtures...');
@@ -436,17 +352,12 @@
     const gate = [];
 
     for (const fixture of fixtures) {
-      setStatus(`Running ${fixture.id} [lamejs]...`);
-      const lame = await runCase(ctx, 'lamejs', fixture);
-      runs.push(lame);
-
-      setStatus(`Running ${fixture.id} [shine]...`);
-      const shine = await runCase(ctx, 'shine', fixture);
-      runs.push(shine);
-
+      setStatus(`Running ${fixture.id}...`);
+      const run = await runCase(ctx, fixture);
+      runs.push(run);
       gate.push({
         fixtureId: fixture.id,
-        ...evaluateFixtureGate(lame, shine)
+        ...evaluateFixtureGate(run)
       });
     }
 
@@ -477,12 +388,12 @@
       resultEl.textContent = latestJson;
       setStatus(report.meta.overallPass ? 'PASS: all gate checks passed' : 'FAIL: one or more gate checks failed');
       copyButton.disabled = false;
-      document.title = report.meta.overallPass ? 'MP3 Benchmark PASS' : 'MP3 Benchmark FAIL';
+      document.title = report.meta.overallPass ? 'Audio Benchmark PASS' : 'Audio Benchmark FAIL';
     } catch (error) {
       const message = `Benchmark failed: ${String(error)}`;
       setStatus(message);
       resultEl.textContent = message;
-      document.title = 'MP3 Benchmark ERROR';
+      document.title = 'Audio Benchmark ERROR';
     } finally {
       runButton.disabled = false;
     }

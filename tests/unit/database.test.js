@@ -1,17 +1,13 @@
 /**
- * Database function tests using fake-indexeddb + node:test.
+ * Database function tests using in-tree IndexedDB shim + node:test.
  */
 
 const assert = require('node:assert/strict');
 const { describe, test, beforeEach, afterEach } = require('node:test');
 
-// Polyfill for structuredClone (required by fake-indexeddb).
-if (!global.structuredClone) {
-    global.structuredClone = (obj) => JSON.parse(JSON.stringify(obj));
-}
-
 // Provide IndexedDB implementation in Node.js.
-require('fake-indexeddb/auto');
+const { installIndexedDBShim } = require('../support/indexeddb-shim.js');
+installIndexedDBShim(global);
 
 // Keep test output focused on assertion results.
 global.console = {

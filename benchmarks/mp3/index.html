@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>MP3 Encoder Benchmark</title>
+  <title>Audio Encoder Benchmark</title>
   <style>
     body {
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
@@ -48,15 +48,15 @@
   </style>
 </head>
 <body>
-  <h1>MP3 Encoder Benchmark Gate</h1>
-  <p class="meta">Runs gated A/B checks for <code>lamejs</code> vs <code>shine</code> in browser runtime.</p>
+  <h1>Audio Encoder Benchmark Gate</h1>
+  <p class="meta">Runs gated checks against the current runtime encoder path.</p>
   <button id="run-btn">Run Benchmark</button>
   <button id="copy-btn" disabled>Copy JSON</button>
   <div id="status"></div>
   <pre id="result"></pre>
 
-  <script src="./vendors/lamejs.min.js"></script>
-  <script src="../../lib/shine-mp3.js"></script>
+  <script src="../../lib/mp3-encoder.js"></script>
+  <script src="../../controls/audio-encoder.js"></script>
   <script src="./benchmark.js"></script>
 </body>
 </html>

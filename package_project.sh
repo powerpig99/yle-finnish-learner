@@ -2,8 +2,6 @@ rm -f yle-dual-sub-extension.zip
 
 zip -r yle-dual-sub-extension.zip \
   manifest.json \
-  THIRD_PARTY_NOTICES.md \
-  third_party/licenses/shine-LGPL-2.0.txt \
   icons/icon.png \
   background.js \
   contentscript.js \
@@ -30,7 +28,7 @@ zip -r yle-dual-sub-extension.zip \
   controls/control-panel.js \
   controls/control-integration.js \
   platforms/yle/yle-injected.js \
-  lib/shine-mp3.js \
+  lib/mp3-encoder.js \
   extension-options-page/index.html \
   extension-options-page/options.css \
   extension-options-page/options.js \

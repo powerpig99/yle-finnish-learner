@@ -1,10 +1,8 @@
 {
-  "devDependencies": {
-    "fake-indexeddb": "6.2.5"
-  },
   "scripts": {
     "test": "node --test tests/unit/database.test.js",
     "test:watch": "node --test --watch tests/unit/database.test.js",
-    "validate": "npm test"
+    "validate": "npm test",
+    "release:gate": "bash scripts/release-gate.sh"
   }
 }
