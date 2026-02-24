@@ -279,22 +279,18 @@ async function checkHasValidProvider() {
   try {
     const result = await chrome.storage.sync.get([
       'translationProvider',
-      'providerApiKey',
       'deeplApiKey',
       'claudeApiKey',
       'geminiApiKey',
       'grokApiKey',
-      'kimiApiKey',
-      'tokenInfos'
+      'kimiApiKey'
     ]) as {
       translationProvider?: string;
-      providerApiKey?: string;
       deeplApiKey?: string;
       claudeApiKey?: string;
       geminiApiKey?: string;
       grokApiKey?: string;
       kimiApiKey?: string;
-      tokenInfos?: DeepLTokenInfoInStorage[];
     };
 
     const provider = result.translationProvider || 'google';
@@ -304,7 +300,7 @@ async function checkHasValidProvider() {
       return true;
     }
 
-    // Provider-specific key lookup (fallback to legacy providerApiKey if present)
+    // Provider-specific key lookup.
     const keyMap: Record<string, string | undefined> = {
       deepl: result.deeplApiKey,
       claude: result.claudeApiKey,
@@ -313,15 +309,7 @@ async function checkHasValidProvider() {
       kimi: result.kimiApiKey
     };
 
-    let apiKey = keyMap[provider] || result.providerApiKey || '';
-
-    // Backward compatibility with DeepL tokens
-    if (provider === 'deepl' && !apiKey && Array.isArray(result.tokenInfos)) {
-      const selectedToken = result.tokenInfos.find(t => t.selected);
-      if (selectedToken?.key) {
-        apiKey = selectedToken.key;
-      }
-    }
+    const apiKey = keyMap[provider] || '';
 
     return apiKey.trim().length > 0;
   } catch (error) {
@@ -572,13 +560,11 @@ chrome.storage.onChanged.addListener(async (changes, namespace) => {
   // Handle provider or API key changes
   if (namespace === 'sync' && (
     changes.translationProvider ||
-    changes.providerApiKey ||
     changes.deeplApiKey ||
     changes.claudeApiKey ||
     changes.geminiApiKey ||
     changes.grokApiKey ||
-    changes.kimiApiKey ||
-    changes.tokenInfos
+    changes.kimiApiKey
   )) {
     const hasValidProvider = await checkHasValidProvider();
     _handleDualSubBehaviourBasedOnSelectedToken(hasValidProvider);

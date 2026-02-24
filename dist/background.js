@@ -47,8 +47,7 @@ async function loadProviderConfig() {
             'grokApiKey',
             'kimiApiKey',
             'kimiBaseUrl',
-            'kimiModel',
-            'tokenInfos'
+            'kimiModel'
         ]);
         const rawKimiModel = result.kimiModel || '';
         const rawKimiBaseUrl = result.kimiBaseUrl || '';
@@ -79,14 +78,6 @@ async function loadProviderConfig() {
                 kimi: result.kimiApiKey,
             };
             currentProvider.apiKey = apiKeyMap[result.translationProvider] || '';
-            // For backward compatibility with DeepL tokens (old format)
-            if (result.translationProvider === 'deepl' && Array.isArray(result.tokenInfos) && !currentProvider.apiKey) {
-                const selectedToken = result.tokenInfos.find(t => t.selected);
-                if (selectedToken) {
-                    currentProvider.apiKey = selectedToken.key;
-                    currentProvider.isPro = selectedToken.type === 'pro';
-                }
-            }
         }
         console.info('YleDualSubExtension: Loaded provider config:', currentProvider.provider);
     }
@@ -97,7 +88,7 @@ async function loadProviderConfig() {
 // Listen for storage changes
 chrome.storage.onChanged.addListener((changes, namespace) => {
     if (namespace === 'sync') {
-        const providerKeys = ['translationProvider', 'deeplApiKey', 'claudeApiKey', 'geminiApiKey', 'grokApiKey', 'kimiApiKey', 'kimiBaseUrl', 'kimiModel', 'tokenInfos'];
+        const providerKeys = ['translationProvider', 'deeplApiKey', 'claudeApiKey', 'geminiApiKey', 'grokApiKey', 'kimiApiKey', 'kimiBaseUrl', 'kimiModel'];
         if (providerKeys.some(key => changes[key])) {
             console.info('YleDualSubExtension: Provider configuration changed, reloading...');
             loadProviderConfig();

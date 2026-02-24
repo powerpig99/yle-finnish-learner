@@ -136,16 +136,6 @@ interface MovieMetadata {
     lastAccessedDays: number;
 }
 
-// Types for DeepL
-interface DeepLTokenInfoInStorage {
-    key: string;
-    type: string;
-    characterCount: string;
-    characterLimit: string;
-    lastUsageCheckedAt: string;
-    selected: boolean;
-}
-
 // Control panel globals (from controls/*)
 declare const ControlIntegration: {
     init: (options?: any) => Promise<any>;
