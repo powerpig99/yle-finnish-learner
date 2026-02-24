@@ -145,13 +145,10 @@ document.addEventListener('click', (e) => {
         target.closest('.dsc-group') ||
         target.closest('.dsc-audio-modal') ||
         target.closest('#dsc-download-audio-btn') ||
-        target.closest('#dsc-yle-waiting-modal') ||
         target.closest('#dsc-yle-recording-ui') ||
         target.closest('.dsc-audio-progress') ||
-        target.closest('.dsc-audio-toast') ||
         target.closest('[id^="dsc-yle-"]') ||
         target.closest('[id^="dsc-audio-"]') ||
-        target.closest('[id^="dsc-export-"]') ||
         target.closest('[class*="dsc-"]')) {
         return;
     }

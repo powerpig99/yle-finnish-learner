@@ -75,25 +75,6 @@ class ControlKeyboard {
   }
 
   /**
-   * Enable or disable keyboard handling
-   * @param {boolean} enabled
-   */
-  setEnabled(enabled) {
-    this.config.enabled = enabled;
-    if (!enabled) {
-      this._pressedKeys.clear();
-    }
-  }
-
-  /**
-   * Update callbacks
-   * @param {Object} callbacks - New callback functions
-   */
-  updateCallbacks(callbacks) {
-    this.callbacks = Object.assign(this.callbacks, callbacks);
-  }
-
-  /**
    * Check if the event target is an input element
    * @param {KeyboardEvent} event
    * @returns {boolean}

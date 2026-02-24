@@ -23,7 +23,6 @@ zip -r yle-dual-sub-extension.zip \
   controls/control-keyboard.js \
   controls/audio-filters.js \
   controls/audio-encoder.js \
-  controls/audio-recorder.js \
   controls/screen-recorder.js \
   controls/audio-download-ui.js \
   controls/control-panel.js \

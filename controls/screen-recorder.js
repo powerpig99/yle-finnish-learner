@@ -12,7 +12,6 @@ const ScreenRecorder = {
    */
   _state: {
     isRecording: false,
-    isCancelled: false,
     mediaRecorder: null,
     mediaStream: null,
     chunks: [],
@@ -49,7 +48,6 @@ const ScreenRecorder = {
     // Reset state
     this._state = {
       isRecording: true,
-      isCancelled: false,
       mediaRecorder: null,
       mediaStream: null,
       chunks: [],
@@ -106,11 +104,6 @@ const ScreenRecorder = {
       };
 
       mediaRecorder.onstop = () => {
-        if (this._state.isCancelled) {
-          this._cleanup();
-          return;
-        }
-
         if (onStatusChange) onStatusChange('Processing recording...');
 
         const blob = new Blob(this._state.chunks, { type: mimeType });
@@ -163,15 +156,6 @@ const ScreenRecorder = {
     }
 
     this._state.isRecording = false;
-  },
-
-  /**
-   * Cancel the current recording
-   */
-  cancel() {
-    this._state.isCancelled = true;
-    this.stopRecording();
-    this._cleanup();
   },
 
   /**

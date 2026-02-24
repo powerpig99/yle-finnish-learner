@@ -11,9 +11,6 @@ const ControlIntegration = {
   /** @type {ControlPanel|null} */
   _panel: null,
 
-  /** @type {boolean} */
-  _initialized: false,  // Whether init() has completed loading preferences
-
   /** @type {Promise<ControlPanel|null>|null} */
   _initPromise: null,
 
@@ -67,9 +64,6 @@ const ControlIntegration = {
       // Load preferences from storage first
       await this._loadPreferences();
       this._applyInitOptions(options);
-
-      // Mark as initialized - preferences are now loaded
-      this._initialized = true;
 
       if (!this._panel) {
         // Create the control panel for YLE
@@ -183,24 +177,6 @@ const ControlIntegration = {
       this._panel = null;
     }
     this._subtitles = [];
-  },
-
-  /**
-   * Ensure panel is mounted, remount if needed
-   * @returns {Promise<boolean>} - true if mounted successfully
-   */
-  async ensureMounted() {
-    if (this._panel && this._panel.isMounted()) {
-      return true;
-    }
-
-    if (this._panel) {
-      console.info('DualSubExtension: Panel not mounted, attempting remount');
-      const element = await this._panel.mount();
-      return !!element;
-    }
-
-    return false;
   },
 
   /**
@@ -439,19 +415,6 @@ const ControlIntegration = {
   },
 
   /**
-   * Get the current state
-   * Simplified: no activation logic, just return state
-   * @returns {{sourceLanguage: string|null, targetLanguage: string, extensionEnabled: boolean}}
-   */
-  getActivationStatus() {
-    return {
-      sourceLanguage: this._state.sourceLanguage,
-      targetLanguage: this._state.targetLanguage,
-      extensionEnabled: this._state.extensionEnabled
-    };
-  },
-
-  /**
    * Handle dual sub toggle
    * Simplified: no restrictions, user controls everything
    * @param {boolean} enabled
@@ -592,233 +555,16 @@ const ControlIntegration = {
       return;
     }
 
-    // Get speech segments if available
-    let speechSegments = null;
-    if (this._subtitles && this._subtitles.length > 0) {
-      speechSegments = AudioFilters.filterSpeechSegments(this._subtitles);
-    }
-
     // Start recording directly without modal
-    await this._startYLERecording(video, speechSegments);
-  },
-
-  /**
-   * Start the audio recording process
-   * @param {HTMLVideoElement} video
-   * @param {Array} segments
-   * @private
-   */
-  async _startAudioRecording(video, segments) {
-    let audioBuffer = null;
-
-    try {
-      // Record audio from video (continuous playback approach)
-      audioBuffer = await AudioRecorder.recordFilteredAudio(video, segments, {
-        onProgress: (currentTime, totalTime, percent, phase) => {
-          AudioDownloadUI.showProgress(
-            currentTime,
-            totalTime,
-            percent,
-            phase,
-            () => {
-              AudioRecorder.cancel();
-            }
-          );
-        },
-        onStatusChange: (status) => {
-          console.info('DualSubExtension:', status);
-        },
-        onError: (error) => {
-          console.error('DualSubExtension: Recording error:', error);
-        }
-      });
-
-      if (!audioBuffer) {
-        throw new Error('No audio was recorded');
-      }
-
-      // Show encoding progress
-      AudioDownloadUI.showEncodingProgress(0);
-
-      // Encode to MP3
-      const mp3Blob = await AudioEncoder.encodeToMP3(audioBuffer, { bitRate: 128 }, (progress) => {
-        AudioDownloadUI.showEncodingProgress(progress * 100);
-      });
-
-      // Generate filename
-      const filename = this._generateFilename();
-
-      // Download the file
-      this._downloadBlob(mp3Blob, filename);
-
-      // Show success
-      AudioDownloadUI.showSuccess(filename, () => {
-        console.info('DualSubExtension: Audio download completed:', filename);
-      });
-
-    } catch (error) {
-      console.error('DualSubExtension: Audio download failed:', error);
-
-      if (error.message === 'Recording cancelled by user') {
-        AudioDownloadUI.hideProgressBar();
-      } else {
-        // Provide helpful error message based on error type
-        let errorMessage = error.message || 'Failed to download audio';
-
-        if (errorMessage.includes('DRM') || errorMessage.includes('cross-origin') ||
-            errorMessage.includes('MediaElementSource') || errorMessage.includes('CORS')) {
-          errorMessage = 'Cannot capture audio from this video. ' +
-            'This is likely due to DRM protection or streaming restrictions. ' +
-            'Try using screen recording software instead.';
-        }
-
-        AudioDownloadUI.showError(errorMessage);
-      }
-    } finally {
-      // Clean up audio recorder resources
-      AudioRecorder.cleanup();
-    }
-  },
-
-  /**
-   * Handle YLE screen recording (for DRM-protected content)
-   * @private
-   */
-  async _handleYLEScreenRecording() {
-    const video = ControlActions.getVideoElement();
-    if (!video) {
-      AudioDownloadUI.showError('No video found on this page');
-      return;
-    }
-
-    // Check browser support
-    const support = ScreenRecorder.checkSupport();
-    if (!support.supported) {
-      AudioDownloadUI.showError(`Screen recording not supported: ${support.reason}`);
-      return;
-    }
-
-    // Get speech segments info if available
-    let speechInfo = null;
-    if (this._subtitles && this._subtitles.length > 0) {
-      const speechSegments = AudioFilters.filterSpeechSegments(this._subtitles);
-      const summary = AudioFilters.getFilteringSummary(this._subtitles);
-      speechInfo = {
-        speechSegments,
-        speechDuration: summary.speechDuration,
-        segmentCount: speechSegments.length,
-        removedCount: summary.removedCount,
-        removedTypes: summary.removedTypes
-      };
-    }
-
-    // Show YLE-specific confirmation dialog
-    this._showYLERecordingConfirmation(video, speechInfo);
-  },
-
-  /**
-   * Show confirmation dialog for YLE screen recording
-   * @param {HTMLVideoElement} video
-   * @param {Object} speechInfo - Speech segment info (optional)
-   * @private
-   */
-  _showYLERecordingConfirmation(video, speechInfo) {
-    AudioDownloadUI.hideModal();
-    AudioDownloadUI.hideProgressBar();
-
-    const totalDuration = video.duration || 0;
-    const speechDuration = speechInfo?.speechDuration || totalDuration;
-    const estimatedVideoSize = Math.round((totalDuration * 2.5 * 1024) / 8 / 1024); // ~2.5 Mbps video
-    const estimatedAudioSize = AudioEncoder.estimateFileSize(speechDuration, 128);
-
-    const modal = document.createElement('div');
-    modal.className = 'dsc-audio-modal';
-    modal.innerHTML = `
-      <div class="dsc-audio-modal__overlay"></div>
-      <div class="dsc-audio-modal__content">
-        <div class="dsc-audio-modal__header">
-          <h3 class="dsc-audio-modal__title">Record from YLE Areena</h3>
-        </div>
-        <div class="dsc-audio-modal__body">
-          <div class="dsc-audio-modal__notice" style="margin-bottom: 16px;">
-            <p><strong>YLE uses DRM protection</strong> which prevents direct audio capture.</p>
-            <p>Instead, we'll use <strong>screen recording</strong> to capture the video with audio.</p>
-          </div>
-          <div class="dsc-audio-modal__info">
-            <div class="dsc-audio-modal__row">
-              <span class="dsc-audio-modal__label">Video duration:</span>
-              <span class="dsc-audio-modal__value">${AudioFilters.formatDuration(totalDuration)}</span>
-            </div>
-            ${speechInfo ? `
-            <div class="dsc-audio-modal__row dsc-audio-modal__row--highlight">
-              <span class="dsc-audio-modal__label">Speech only:</span>
-              <span class="dsc-audio-modal__value">${AudioFilters.formatDuration(speechInfo.speechDuration)} (${speechInfo.segmentCount} segments)</span>
-            </div>
-            ` : ''}
-            <div class="dsc-audio-modal__row">
-              <span class="dsc-audio-modal__label">Recording output:</span>
-              <span class="dsc-audio-modal__value">Video (~${estimatedVideoSize} MB) or MP3 (~${estimatedAudioSize})</span>
-            </div>
-          </div>
-          <div class="dsc-audio-modal__notice" style="margin-top: 16px;">
-            <p><strong>How it works:</strong></p>
-            <ol style="margin: 8px 0; padding-left: 20px; font-size: 13px;">
-              <li>Click "Start Recording" below</li>
-              <li>In the popup, select this tab and check "Share tab audio"</li>
-              <li>Play the video from where you want to start</li>
-              <li>When done, click "Stop Recording"</li>
-            </ol>
-          </div>
-        </div>
-        <div class="dsc-audio-modal__footer">
-          <button class="dsc-audio-modal__btn dsc-audio-modal__btn--secondary" id="dsc-yle-cancel">
-            Cancel
-          </button>
-          <button class="dsc-audio-modal__btn dsc-audio-modal__btn--primary" id="dsc-yle-record">
-            Start Recording
-          </button>
-        </div>
-      </div>
-    `;
-
-    document.body.appendChild(modal);
-
-    // Event handlers
-    const confirmBtn = modal.querySelector('#dsc-yle-record');
-    const cancelBtn = modal.querySelector('#dsc-yle-cancel');
-    const overlay = modal.querySelector('.dsc-audio-modal__overlay');
-
-    const closeModal = () => {
-      modal.remove();
-    };
-
-    const handleConfirm = async (e) => {
-      e.stopPropagation();
-      e.preventDefault();
-      closeModal();
-      await this._startYLERecording(video, speechInfo?.speechSegments);
-    };
-
-    const handleCancel = (e) => {
-      e.stopPropagation();
-      e.preventDefault();
-      closeModal();
-    };
-
-    confirmBtn.addEventListener('click', handleConfirm);
-    cancelBtn.addEventListener('click', handleCancel);
-    overlay.addEventListener('click', handleCancel);
-
-    setTimeout(() => confirmBtn.focus(), 100);
+    await this._startYLERecording(video);
   },
 
   /**
    * Start YLE screen recording
    * @param {HTMLVideoElement} video
-   * @param {Array} speechSegments - Optional speech segments for extraction
    * @private
    */
-  async _startYLERecording(video, speechSegments) {
+  async _startYLERecording(video) {
     // NOTE: On YLE, we cannot show any modal as it closes the video overlay
     // The browser's native screen share dialog will appear instead
     console.info('DualSubExtension: Starting YLE screen recording (no modal to avoid closing video)');
@@ -830,10 +576,10 @@ const ControlIntegration = {
     try {
       await ScreenRecorder.startRecording({
         expectedDuration: video.duration,
-        onProgress: (currentTime, totalTime, percent, phase) => {
+        onProgress: (currentTime, totalTime, percent) => {
           // Only show progress UI once recording has started
           // By this point the browser's native dialog has been handled
-          this._showYLERecordingProgress(currentTime, totalTime, percent, phase, speechSegments);
+          this._showYLERecordingProgress(currentTime, totalTime, percent);
         },
         onStatusChange: (status) => {
           console.info('DualSubExtension: Screen recording status:', status);
@@ -904,54 +650,10 @@ const ControlIntegration = {
   },
 
   /**
-   * Show modal while waiting for screen share permission
-   * @returns {HTMLElement} The modal element
-   * @private
-   */
-  _showWaitingForPermissionModal() {
-    const modal = document.createElement('div');
-    modal.className = 'dsc-audio-modal';
-    modal.id = 'dsc-yle-waiting-modal';
-    modal.innerHTML = `
-      <div class="dsc-audio-modal__overlay"></div>
-      <div class="dsc-audio-modal__content" style="max-width: 350px;">
-        <div class="dsc-audio-modal__header">
-          <h3 class="dsc-audio-modal__title">Waiting for Permission</h3>
-        </div>
-        <div class="dsc-audio-modal__body" style="text-align: center;">
-          <div style="font-size: 32px; margin-bottom: 16px;">🎬</div>
-          <p>Please select this tab in the browser dialog and enable "Share tab audio".</p>
-          <p style="margin-top: 12px; font-size: 13px; color: #888;">If you don't see a dialog, check if it's blocked by your browser.</p>
-        </div>
-        <div class="dsc-audio-modal__footer">
-          <button class="dsc-audio-modal__btn dsc-audio-modal__btn--secondary" id="dsc-yle-cancel-waiting" style="width: 100%;">
-            Cancel
-          </button>
-        </div>
-      </div>
-    `;
-
-    document.body.appendChild(modal);
-
-    // Cancel handler
-    modal.querySelector('#dsc-yle-cancel-waiting').addEventListener('click', () => {
-      ScreenRecorder.cancel();
-      modal.remove();
-    });
-
-    modal.querySelector('.dsc-audio-modal__overlay').addEventListener('click', () => {
-      ScreenRecorder.cancel();
-      modal.remove();
-    });
-
-    return modal;
-  },
-
-  /**
    * Show recording progress with stop button
    * @private
    */
-  _showYLERecordingProgress(currentTime, totalTime, percent, phase, speechSegments) {
+  _showYLERecordingProgress(currentTime, totalTime, percent) {
     // Create or update the recording UI
     let recordingUI = document.getElementById('dsc-yle-recording-ui');
 
@@ -1007,9 +709,6 @@ const ControlIntegration = {
    * @private
    */
   _hideYLERecordingUI() {
-    const waitingModal = document.getElementById('dsc-yle-waiting-modal');
-    if (waitingModal) waitingModal.remove();
-
     const recordingUI = document.getElementById('dsc-yle-recording-ui');
     if (recordingUI) recordingUI.remove();
 
@@ -1052,181 +751,6 @@ const ControlIntegration = {
   },
 
   /**
-   * Show export options after recording (DEPRECATED - kept for reference)
-   * @param {Blob} videoBlob
-   * @param {Array} speechSegments - Adjusted speech segments (timestamps relative to recording start)
-   * @param {number} recordingDuration - Duration of the recording in seconds
-   * @private
-   */
-  _showYLEExportOptions(videoBlob, speechSegments, recordingDuration) {
-    const modal = document.createElement('div');
-    modal.className = 'dsc-audio-modal';
-
-    const videoSize = (videoBlob.size / (1024 * 1024)).toFixed(1);
-    const hasSpeechSegments = speechSegments && speechSegments.length > 0;
-    const durationStr = recordingDuration ? `${Math.round(recordingDuration)}s` : '';
-    console.info('DualSubExtension: Export options - videoSize:', videoSize, 'MB, speechSegments:', speechSegments?.length || 0, 'duration:', durationStr);
-
-    modal.innerHTML = `
-      <div class="dsc-audio-modal__overlay"></div>
-      <div class="dsc-audio-modal__content">
-        <div class="dsc-audio-modal__header">
-          <h3 class="dsc-audio-modal__title">Recording Complete</h3>
-        </div>
-        <div class="dsc-audio-modal__body">
-          <div class="dsc-audio-modal__info">
-            <div class="dsc-audio-modal__row">
-              <span class="dsc-audio-modal__label">Recorded:</span>
-              <span class="dsc-audio-modal__value">${videoSize} MB video${durationStr ? ` (${durationStr})` : ''}</span>
-            </div>
-            ${hasSpeechSegments ? `
-            <div class="dsc-audio-modal__row">
-              <span class="dsc-audio-modal__label">Speech segments:</span>
-              <span class="dsc-audio-modal__value">${speechSegments.length} (non-verbal filtered)</span>
-            </div>
-            ` : ''}
-          </div>
-          <div class="dsc-audio-modal__notice" style="margin-top: 16px;">
-            <p>Choose export format:</p>
-          </div>
-        </div>
-        <div class="dsc-audio-modal__footer" style="flex-direction: column; gap: 8px;">
-          <button class="dsc-audio-modal__btn dsc-audio-modal__btn--primary" id="dsc-export-video" style="width: 100%;">
-            Download Video (WebM)
-          </button>
-          <button class="dsc-audio-modal__btn dsc-audio-modal__btn--primary" id="dsc-export-mp3-full" style="width: 100%;">
-            Extract Full Audio (MP3)
-          </button>
-          ${hasSpeechSegments ? `
-          <button class="dsc-audio-modal__btn dsc-audio-modal__btn--primary" id="dsc-export-mp3-speech" style="width: 100%;">
-            Extract Speech Only (MP3)
-          </button>
-          ` : ''}
-          <button class="dsc-audio-modal__btn dsc-audio-modal__btn--secondary" id="dsc-export-close" style="width: 100%; margin-top: 8px;">
-            Done
-          </button>
-          <p id="dsc-export-status" style="margin: 8px 0 0 0; text-align: center; font-size: 12px; color: #27ae60; display: none;"></p>
-        </div>
-      </div>
-    `;
-
-    document.body.appendChild(modal);
-
-    const closeModal = () => modal.remove();
-
-    // Prevent clicks from propagating to YLE player (which might close video)
-    modal.addEventListener('click', (e) => {
-      e.stopPropagation();
-    });
-
-    // Helper to show status in modal
-    const showStatus = (message, isError = false) => {
-      const statusEl = modal.querySelector('#dsc-export-status');
-      if (statusEl) {
-        statusEl.textContent = message;
-        statusEl.style.display = 'block';
-        statusEl.style.color = isError ? '#e74c3c' : '#27ae60';
-      }
-    };
-
-    // Helper to disable/enable buttons during processing
-    const setButtonsEnabled = (enabled) => {
-      modal.querySelectorAll('button').forEach(btn => {
-        btn.disabled = !enabled;
-        btn.style.opacity = enabled ? '1' : '0.5';
-      });
-    };
-
-    // Video download
-    modal.querySelector('#dsc-export-video').addEventListener('click', (e) => {
-      e.stopPropagation();
-      e.preventDefault();
-      console.info('DualSubExtension: Downloading video, blob size:', videoBlob.size);
-      const filename = this._generateFilename().replace('.mp3', '.webm');
-      this._downloadBlob(videoBlob, filename);
-      showStatus(`Downloaded: ${filename}`);
-    });
-
-    // Full MP3 extraction (no filtering)
-    modal.querySelector('#dsc-export-mp3-full').addEventListener('click', async (e) => {
-      e.stopPropagation();
-      e.preventDefault();
-      console.info('DualSubExtension: Extracting full audio as MP3 from video blob, size:', videoBlob.size);
-
-      setButtonsEnabled(false);
-      showStatus('Extracting full audio...');
-
-      try {
-        await ScreenRecorder.extractSpeechAudio(videoBlob, null, {
-          onProgress: (currentTime, totalTime, percent, phase) => {
-            showStatus(`${phase === 'encoding' ? 'Encoding' : 'Extracting'}... ${Math.round(percent)}%`);
-          },
-          onComplete: (mp3Blob) => {
-            console.info('DualSubExtension: Full MP3 extraction complete, size:', mp3Blob.size);
-            const filename = this._generateFilename();
-            this._downloadBlob(mp3Blob, filename);
-            setButtonsEnabled(true);
-            showStatus(`Downloaded: ${filename}`);
-          },
-          onError: (error) => {
-            setButtonsEnabled(true);
-            showStatus('Failed: ' + error.message, true);
-          }
-        });
-      } catch (error) {
-        setButtonsEnabled(true);
-        showStatus('Failed: ' + error.message, true);
-      }
-    });
-
-    // Speech-only MP3 extraction (with filler removal)
-    if (hasSpeechSegments) {
-      modal.querySelector('#dsc-export-mp3-speech').addEventListener('click', async (e) => {
-        e.stopPropagation();
-        e.preventDefault();
-        console.info('DualSubExtension: Extracting speech-only MP3, segments:', speechSegments.length);
-
-        setButtonsEnabled(false);
-        showStatus('Extracting speech (removing non-verbal)...');
-
-        try {
-          await ScreenRecorder.extractSpeechAudio(videoBlob, speechSegments, {
-            onProgress: (currentTime, totalTime, percent, phase) => {
-              showStatus(`${phase === 'encoding' ? 'Encoding' : 'Extracting speech'}... ${Math.round(percent)}%`);
-            },
-            onComplete: (mp3Blob) => {
-              console.info('DualSubExtension: Speech-only MP3 extraction complete, size:', mp3Blob.size);
-              const filename = this._generateFilename().replace('.mp3', '_speech.mp3');
-              this._downloadBlob(mp3Blob, filename);
-              setButtonsEnabled(true);
-              showStatus(`Downloaded: ${filename}`);
-            },
-            onError: (error) => {
-              setButtonsEnabled(true);
-              showStatus('Failed: ' + error.message, true);
-            }
-          });
-        } catch (error) {
-          setButtonsEnabled(true);
-          showStatus('Failed: ' + error.message, true);
-        }
-      });
-    }
-
-    // Done button - closes modal
-    modal.querySelector('#dsc-export-close').addEventListener('click', (e) => {
-      e.stopPropagation();
-      closeModal();
-    });
-
-    // Clicking overlay does nothing (must use buttons)
-    modal.querySelector('.dsc-audio-modal__overlay').addEventListener('click', (e) => {
-      e.stopPropagation();
-      // Don't close - user must click a button
-    });
-  },
-
-  /**
    * Generate filename for the audio download
    * @returns {string}
    * @private
@@ -1264,56 +788,6 @@ const ControlIntegration = {
   },
 
   /**
-   * Test if audio capture is likely to work for this video
-   * Does basic checks without actually trying to capture (which can break some players)
-   * @param {HTMLVideoElement} video
-   * @returns {Promise<{success: boolean, reason?: string}>}
-   * @private
-   */
-  async _testAudioCapture(video) {
-    // Check 1: Does the video have audio?
-    // Note: videoWidth check is a proxy - if video has no dimensions, it might not be loaded
-    if (!video.videoWidth && !video.videoHeight && video.readyState < 2) {
-      return {
-        success: false,
-        reason: 'Video is not fully loaded yet. Please wait and try again.'
-      };
-    }
-
-    // Check 2: Is the video in an error state?
-    if (video.error) {
-      return {
-        success: false,
-        reason: 'Video is in an error state.'
-      };
-    }
-
-    // Check 3: Basic API availability
-    const hasWebAudio = !!window.AudioContext;
-    const hasMediaRecorder = !!window.MediaRecorder;
-
-    if (!hasWebAudio || !hasMediaRecorder) {
-      return {
-        success: false,
-        reason: 'Your browser does not support the required audio APIs.'
-      };
-    }
-
-    // Check 4: Check if captureStream exists (but don't call it - that can break players)
-    const hasCaptureStream = typeof video.captureStream === 'function';
-
-    // If captureStream doesn't exist, we'll rely on createMediaElementSource
-    // which should work for most cases
-    if (!hasCaptureStream) {
-      console.info('captureStream not available, will use createMediaElementSource');
-    }
-
-    // We can't truly test without potentially breaking the video,
-    // so we allow the attempt and handle errors during actual recording
-    return { success: true };
-  },
-
-  /**
    * Download a blob as a file
    * @param {Blob} blob
    * @param {string} filename
@@ -1324,7 +798,12 @@ const ControlIntegration = {
 
     try {
       // Convert blob to data URL for background script
-      const dataUrl = await this._blobToDataUrl(blob);
+      const dataUrl = await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onloadend = () => resolve(reader.result);
+        reader.onerror = reject;
+        reader.readAsDataURL(blob);
+      });
 
       // Send to background script to download via chrome.downloads API
       // This avoids any focus events on the page
@@ -1344,21 +823,6 @@ const ControlIntegration = {
       console.error('DualSubExtension: Download error, using fallback:', error);
       this._downloadBlobFallback(blob, filename);
     }
-  },
-
-  /**
-   * Convert blob to data URL
-   * @param {Blob} blob
-   * @returns {Promise<string>}
-   * @private
-   */
-  _blobToDataUrl(blob) {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onloadend = () => resolve(reader.result);
-      reader.onerror = reject;
-      reader.readAsDataURL(blob);
-    });
   },
 
   /**

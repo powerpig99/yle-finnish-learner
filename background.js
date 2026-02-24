@@ -230,7 +230,8 @@ async function getCacheCounts() {
     const [wordCount, subtitleCount] = await Promise.all([
         // Word cache is shared per origin; use max across YLE tabs.
         aggregateYleTabCounts('getWordCacheCount', (counts) => Math.max(0, ...counts)),
-        aggregateYleTabCounts('getSubtitleCacheCount', (counts) => counts.reduce((sum, count) => sum + count, 0))
+        // Subtitle cache is now read from shared IndexedDB; use max across YLE tabs.
+        aggregateYleTabCounts('getSubtitleCacheCount', (counts) => Math.max(0, ...counts))
     ]);
     return { wordCount, subtitleCount };
 }
@@ -241,7 +242,8 @@ async function getCacheCounts() {
 async function clearSubtitleCachesInTabs() {
     const subtitleCount = await aggregateYleTabCounts(
         'clearSubtitleCache',
-        (counts) => counts.reduce((sum, count) => sum + count, 0),
+        // Shared IndexedDB cache: each tab reports same pool, so use max to avoid overcount.
+        (counts) => Math.max(0, ...counts),
         (error) => console.warn('YleDualSubExtension: Error clearing subtitle caches:', error)
     );
     console.info(`YleDualSubExtension: Cleared ${subtitleCount} subtitle translations`);

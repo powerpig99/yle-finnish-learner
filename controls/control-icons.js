@@ -88,51 +88,7 @@ const ControlIcons = {
    */
   download: `<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
     <path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/>
-  </svg>`,
-
-  /**
-   * Create an SVG element from an icon string
-   * @param {string} iconHtml - The icon HTML string
-   * @param {Object} options - Optional configuration
-   * @param {number} [options.size] - Size in pixels (applies to both width and height)
-   * @param {string} [options.color] - Color for the icon
-   * @returns {SVGElement}
-   */
-  createSvgElement(iconHtml, options = {}) {
-    const template = document.createElement('template');
-    template.innerHTML = iconHtml.trim();
-    const svg = template.content.firstChild;
-
-    if (options.size) {
-      svg.setAttribute('width', options.size);
-      svg.setAttribute('height', options.size);
-    }
-
-    if (options.color) {
-      svg.style.fill = options.color;
-    }
-
-    return svg;
-  },
-
-  /**
-   * Get icon HTML with custom size
-   * @param {string} iconName - Name of the icon
-   * @param {number} size - Size in pixels
-   * @returns {string} - HTML string with adjusted size
-   */
-  getIconHtml(iconName, size = 18) {
-    const icon = this[iconName];
-    if (!icon) {
-      console.warn(`ControlIcons: Unknown icon "${iconName}"`);
-      return '';
-    }
-
-    // Replace size attributes
-    return icon
-      .replace(/width="18"/g, `width="${size}"`)
-      .replace(/height="18"/g, `height="${size}"`);
-  }
+  </svg>`
 };
 
 window.ControlIcons = ControlIcons;

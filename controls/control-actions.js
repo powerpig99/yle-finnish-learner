@@ -276,33 +276,6 @@ const ControlActions = {
   },
 
   /**
-   * Get current playback speed
-   * @returns {number}
-   */
-  getPlaybackSpeed() {
-    const video = this.getVideoElement();
-    return video ? video.playbackRate : 1;
-  },
-
-  /**
-   * Adjust playback speed by increment
-   * @param {number} increment - Amount to change speed (e.g., 0.25 or -0.25)
-   * @returns {number} - New playback speed
-   */
-  adjustPlaybackSpeed(increment) {
-    const video = this.getVideoElement();
-    if (!video) return 1;
-
-    let newSpeed = Math.round((video.playbackRate + increment) * 100) / 100;
-    // Clamp between 0.5 and 2.0
-    newSpeed = Math.max(0.5, Math.min(2.0, newSpeed));
-    video.playbackRate = newSpeed;
-
-    console.info('DualSubExtension: Playback speed adjusted to', newSpeed + 'x');
-    return newSpeed;
-  },
-
-  /**
    * Focus the YLE video player element
    */
   focusPlayer() {
@@ -331,33 +304,6 @@ const ControlActions = {
       .catch(err => {
         console.warn('DualSubExtension: Failed to open options page:', err);
       });
-  },
-
-  /**
-   * Save preference to Chrome storage
-   * @param {string} key - Storage key
-   * @param {*} value - Value to save
-   */
-  savePreference(key, value) {
-    chrome.storage.sync.set({ [key]: value }).catch(err => {
-      console.warn('DualSubExtension: Error saving preference:', err);
-    });
-  },
-
-  /**
-   * Load preference from Chrome storage
-   * @param {string} key - Storage key
-   * @param {*} defaultValue - Default value if not found
-   * @returns {Promise<*>}
-   */
-  async loadPreference(key, defaultValue) {
-    try {
-      const result = await chrome.storage.sync.get(key);
-      return result[key] !== undefined ? result[key] : defaultValue;
-    } catch (err) {
-      console.warn('DualSubExtension: Error loading preference:', err);
-      return defaultValue;
-    }
   }
 };
 
