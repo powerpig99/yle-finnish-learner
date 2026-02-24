@@ -209,12 +209,10 @@ async function saveSubtitlesBatch(db, subtitles) {
             for (const subtitle of subtitles) {
                 const DBSaveRequest = objectStore.put(subtitle);
 
-                // eslint-disable-next-line no-loop-func
                 DBSaveRequest.onsuccess = (_event) => {
                     savedCount++;
                 };
 
-                // eslint-disable-next-line no-loop-func
                 DBSaveRequest.onerror = (_event) => {
                     console.error("YleDualSubExtension: saveSubtitlesBatch: Error saving subtitle:", DBSaveRequest.error);
                     errorOccurred = true;
@@ -633,9 +631,8 @@ async function clearAllWordTranslations(db) {
 
 // Conditional export for testing
 // Check for module.exports first (CommonJS/Node.js environment)
-// @ts-ignore - module may not be defined in browser
 if (typeof module !== 'undefined' && typeof module.exports !== 'undefined') {
-    // Node.js/Jest environment (even with JSDOM)
+    // Node.js test environment
     module.exports = {
         openDatabase,
         saveSubtitle,

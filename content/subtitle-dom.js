@@ -386,7 +386,6 @@ function isVideoElementAppearMutation(mutation) {
             // Case 2: The added node CONTAINS a video element (initial load scenario)
             if (element.tagName === "VIDEO" || element.querySelector?.('video')) {
                 checkVideoAppearMutationDebounceFlag = true;
-                // eslint-disable-next-line no-loop-func
                 setTimeout(() => { checkVideoAppearMutationDebounceFlag = false; }, 1500);
                 return true;
             }
@@ -398,7 +397,7 @@ function isVideoElementAppearMutation(mutation) {
         return false;
     }
 }
-// CC ON/OFF detection is now handled by TextTrack API in settings.ts
+// CC ON/OFF detection is now handled by TextTrack API in settings.js
 // (setupVideoSpeedControl → video.textTracks 'change' event)
 const observer = new MutationObserver((mutations) => {
     mutations.forEach((mutation) => {

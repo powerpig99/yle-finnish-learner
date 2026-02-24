@@ -29,25 +29,25 @@ A Chrome extension (v5.3.0, Manifest v3) that provides dual subtitles (original 
 
 ```
 yle-language-reactor/
-├── TypeScript source (compiled to dist/ via npm run build:extension)
-│   ├── background.ts         # Service worker for translation handling
-│   ├── contentscript.ts      # Main content script (YLE-specific)
+├── JS source (loaded directly by Chrome — no build step)
+│   ├── background.js         # Service worker for translation handling
+│   ├── contentscript.js      # Main content script (YLE-specific)
 │   └── content/              # Content-script modules
-│       ├── settings.ts       # Settings, state, auto-pause, CC detection
-│       ├── subtitle-dom.ts   # Subtitle DOM, mutation observers, getSubtitleTextElements()
-│       ├── ui-events.ts      # Mouse/focus handling, UI event listeners
-│       ├── word-translation.ts # Popup dictionary + tooltip logic
-│       ├── translation-api.ts  # Translation API calls
-│       ├── translation-queue.ts # Batch translation queue
-│       └── runtime-messages.ts  # Popup + runtime message handlers
+│       ├── settings.js       # Settings, state, auto-pause, CC detection
+│       ├── subtitle-dom.js   # Subtitle DOM, mutation observers, getSubtitleTextElements()
+│       ├── ui-events.js      # Mouse/focus handling, UI event listeners
+│       ├── word-translation.js # Popup dictionary + tooltip logic
+│       ├── translation-api.js  # Translation API calls
+│       ├── translation-queue.js # Batch translation queue
+│       └── runtime-messages.js  # Popup + runtime message handlers
 │
-├── Plain JS (not compiled)
+├── Shared JS modules
 │   ├── inject.js             # Script injector for YLE
 │   ├── database.js           # IndexedDB word translation cache
 │   ├── utils.js              # Storage utilities
 │   └── popup.js              # Minimal popup handler
 │
-├── controls/                 # Control panel modules (plain JS)
+├── controls/                 # Control panel modules
 │   ├── control-panel.js      # Main ControlPanel class
 │   ├── control-actions.js    # Action handlers (skip/repeat/speed)
 │   ├── control-keyboard.js   # Keyboard handler
@@ -60,8 +60,7 @@ yle-language-reactor/
 │   └── screen-recorder.js    # Screen capture recording for DRM
 │
 ├── platforms/yle/            # YLE-specific adapter
-│   ├── yle-adapter.ts        # YLE Areena implementation (compiled to dist/)
-│   └── yle-injected.js       # Page-context VTT interception (plain JS)
+│   └── yle-injected.js       # Page-context VTT interception
 │
 ├── Other
 │   ├── manifest.json         # Chrome Extension Manifest v3
@@ -118,7 +117,7 @@ yle-language-reactor/
 | Word popup dictionary | Click any word -> translation popup | `createSubtitleSpanWithClickableWords` |
 | Skip prev/next | Jump to previous/next subtitle | `ControlActions.skipToPreviousSubtitle/skipToNextSubtitle` |
 | Repeat | Play from subtitle start to current position | `ControlActions.repeatCurrentSubtitle` |
-| Auto-pause | Pause at end of each subtitle (setTimeout-based) | `scheduleAutoPause()` in settings.ts, video event listeners |
+| Auto-pause | Pause at end of each subtitle (setTimeout-based) | `scheduleAutoPause()` in settings.js, video event listeners |
 | Speed control | 0.5x - 2.0x playback | `ControlActions.setPlaybackSpeed` |
 
 ### Subtitle Processing Pipeline
@@ -337,12 +336,6 @@ if (typeof ControlIntegration !== 'undefined') {
 }
 ```
 
-2. Export `fullSubtitles` to window for cross-module access:
-```javascript
-const fullSubtitles = [];
-window.fullSubtitles = fullSubtitles;  // For fallback access from control-integration.js
-```
-
 **Key insight:** `setSubtitles()` just stores data - don't guard it with UI-dependent checks like `isInitialized()`.
 
 ### 10. Array Reference Bug in setSubtitles (CRITICAL)
@@ -414,9 +407,9 @@ if (typeof ControlIntegration !== 'undefined' && ControlIntegration._panel && Co
 
 **Root Cause:** The old `setupYleWrapperStyleObserver()` watched for `getComputedStyle(wrapper).display === 'none'`, but YLE never sets `display: none` on the subtitles-wrapper. YLE keeps the wrapper in the DOM with `display: flex` and simply stops populating it with child spans.
 
-**Solution (content/settings.ts):**
+**Solution (content/settings.js):**
 Use the `video.textTracks` API which fires a `change` event immediately when CC is toggled. YLE sets track mode to `'hidden'` when CC is ON and `'disabled'` when CC is OFF:
-```typescript
+```javascript
 // In setupVideoSpeedControl(), after getting the video element:
 let _ccWasActive = Array.from(video.textTracks).some(t => t.mode !== 'disabled');
 video.textTracks.addEventListener('change', () => {
@@ -560,15 +553,14 @@ AFTER:  subtitles-wrapper > div.LiveRegion > <div data-testid="subtitle-row">tex
 ```
 All `querySelectorAll("span")` calls returned 0 elements. The mutation handler found no text to render.
 
-**Solution (`content/subtitle-dom.ts`):**
+**Solution (`content/subtitle-dom.js`):**
 1. Replaced all element-type-specific queries with a generic leaf-text finder:
-```typescript
-function getSubtitleTextElements(container: HTMLElement): HTMLElement[] {
-  const leaves: HTMLElement[] = [];
+```javascript
+function getSubtitleTextElements(container) {
+  const leaves = [];
   container.querySelectorAll('*').forEach(el => {
-    const htmlEl = el as HTMLElement;
-    if (htmlEl.children.length === 0 && htmlEl.textContent?.trim()) {
-      leaves.push(htmlEl);
+    if (el.children.length === 0 && el.textContent?.trim()) {
+      leaves.push(el);
     }
   });
   return leaves;
@@ -581,16 +573,16 @@ function getSubtitleTextElements(container: HTMLElement): HTMLElement[] {
 **Key insights:**
 - Never query for specific element types (`span`, `div`) when you only need the text content. Use a generic leaf-element finder instead — immune to future DOM restructuring
 - YLE sets `font-size` via inline style on the wrapper (dynamically based on player size), not via CSS class. Must copy this to the displayed wrapper
-- The `addContentToDisplayedSubtitlesWrapper` parameter type changed from `NodeListOf<HTMLSpanElement>` to `HTMLElement[]`
+- The `addContentToDisplayedSubtitlesWrapper` parameter changed from typed NodeList to plain array
 
-**Files changed:** `content/subtitle-dom.ts`, `content/ui-events.ts`
+**Files changed:** `content/subtitle-dom.js`, `content/ui-events.js`
 
 ### 21. Zone-Based Control Activation & Cursor Auto-Hide (Session 2026-02-10)
 **Problem:** During frequent auto-pause, two things are distracting:
 1. Controls appear on any mouse movement anywhere on the video (even a slight nudge)
 2. Mouse cursor stays visible when video is paused
 
-**Solution (`content/ui-events.ts` + `styles.css`):**
+**Solution (`content/ui-events.js` + `styles.css`):**
 
 1. **Zone-based controls**: `onMouseActivity(e)` checks `e.clientY` against the player bounds. Only shows controls when mouse is in bottom 80px (bottom controls) or top 60px (top controls). Mouse movement in the middle of the video does nothing to controls.
 
@@ -607,7 +599,7 @@ div[class*="PlayerUI__UI"]:not(.yle-cursor-active) * {
 - `touchstart` handler doesn't have MouseEvent coordinates, so it always shows both controls and cursor
 - `getPlayerUI()` helper avoids repeated `querySelector` calls across multiple functions
 
-**Files changed:** `content/ui-events.ts`, `styles.css`
+**Files changed:** `content/ui-events.js`, `styles.css`
 
 ### 22. Auto-Pause Double-Fire After Repeat (Session 2026-02-22)
 **Problem:** After repeat (R key), pressing space to resume would immediately re-pause, requiring a second space press. First press appeared to move only a single frame.
@@ -616,9 +608,9 @@ div[class*="PlayerUI__UI"]:not(.yle-cursor-active) * {
 - Resume at 409.403 → `play` event → `scheduleAutoPause()`
 - Only 3ms until pause point (409.464) → immediately re-pauses
 
-**Solution (`content/settings.ts` — `scheduleAutoPause`):**
+**Solution (`content/settings.js` — `scheduleAutoPause`):**
 Timer callback now verifies `video.currentTime >= pauseTarget` before pausing. If the video hasn't reached the target (due to seek startup delay), it re-schedules for the remaining time:
-```typescript
+```javascript
 _autoPauseTimeout = setTimeout(function autoPauseCheck() {
   _autoPauseTimeout = null;
   if (!autoPauseEnabled) return;
@@ -685,9 +677,8 @@ if (typeof ControlIntegration !== 'undefined') {
 **4. Cross-Module Variable Access**
 ```javascript
 // Variables in contentscript.js aren't automatically visible in control-integration.js
-// Export to window if needed:
-const fullSubtitles = [];
-window.fullSubtitles = fullSubtitles;  // Now accessible as window.fullSubtitles
+// Manifest load order determines which globals are available to which scripts
+// Use ControlIntegration.setSubtitles() to pass data across modules
 ```
 
 ### Key Questions When Debugging
@@ -754,13 +745,21 @@ See "YLE Menu Focus Issue" above - likely focusVideo() stealing focus.
 
 ---
 
+## Development Toolchain
+
+- **No build step.** Source JS is loaded directly by Chrome via manifest.json.
+- **No TypeScript.** Types via JSDoc annotations (`/** @type {string} */`). IDE type-checking works via JSDoc.
+- **Tests:** `node --test` (built-in runner) + `fake-indexeddb` (1 devDependency, ~684K node_modules).
+- **Validate:** `npm run validate` = `npm test` (23 tests).
+- **Package:** `bash package_project.sh` → 32-file zip.
+
 ## Key Statistics
 
 | Category | Count |
 |----------|-------|
-| Total Lines of Code | ~12,700 |
 | Platform | YLE Areena only |
 | Control Modules | 10 |
 | Keyboard Shortcuts | 8 |
 | Translation Providers | 6 (Google, DeepL, Claude, Gemini, Grok, Kimi) |
 | Chrome API Permissions | storage, downloads |
+| DevDependencies | 1 (`fake-indexeddb`) |

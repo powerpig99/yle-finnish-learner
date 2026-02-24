@@ -6,10 +6,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     if (message.action === 'extensionToggled') {
         extensionEnabled = message.enabled;
         console.info('DualSubExtension: Received extensionToggled from popup:', message.enabled);
-        // Update control integration if available
-        if (typeof ControlIntegration !== 'undefined') {
-            ControlIntegration._handleExtensionToggle(message.enabled);
-        }
+        ControlIntegration._handleExtensionToggle(message.enabled);
         sendResponse({ success: true });
     }
     if (message.action === 'clearSubtitleCache') {

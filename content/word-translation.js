@@ -363,7 +363,6 @@ async function clearWordCache() {
     }
 }
 // Expose clearWordCache to window for debugging
-// @ts-ignore
 window.clearWordCache = clearWordCache;
 /**
  * Translate a single word using Wiktionary, with LLM fallback using context

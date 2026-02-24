@@ -176,6 +176,29 @@ async function downloadBlobViaAPI(dataUrl, filename) {
         });
     });
 }
+
+const YLE_TAB_URL_PATTERN = 'https://areena.yle.fi/*';
+
+async function queryYleTabs() {
+    return chrome.tabs.query({ url: [YLE_TAB_URL_PATTERN] });
+}
+
+async function requestCountFromYleTabs(action) {
+    const tabs = await queryYleTabs();
+    if (tabs.length === 0) {
+        return [];
+    }
+    const countPromises = tabs.map((tab) => {
+        if (typeof tab.id !== 'number') {
+            return Promise.resolve(0);
+        }
+        return chrome.tabs.sendMessage(tab.id, { action })
+            .then(response => response?.count || 0)
+            .catch(() => 0);
+    });
+    return Promise.all(countPromises);
+}
+
 /**
  * Clear all word translations from IndexedDB cache via content scripts
  * Note: Word cache is stored in web page origins, so we must ask content scripts to clear it.
@@ -183,13 +206,7 @@ async function downloadBlobViaAPI(dataUrl, filename) {
  */
 async function clearWordTranslationCache() {
     try {
-        const tabs = await chrome.tabs.query({});
-        const clearPromises = tabs.map(tab => {
-            return chrome.tabs.sendMessage(tab.id, { action: 'clearWordCache' })
-                .then(response => response?.count || 0)
-                .catch(() => 0);
-        });
-        const counts = await Promise.all(clearPromises);
+        const counts = await requestCountFromYleTabs('clearWordCache');
         // Return the max count cleared (same origin cache is shared across tabs)
         const maxCleared = Math.max(0, ...counts);
         console.info(`YleDualSubExtension: Cleared ${maxCleared} word translations from cache`);
@@ -201,29 +218,6 @@ async function clearWordTranslationCache() {
     }
 }
 /**
- * Open the database with proper schema creation
- * @returns {Promise<IDBDatabase>}
- */
-function openCacheDatabase() {
-    return new Promise((resolve, reject) => {
-        const request = indexedDB.open('YleDualSubCache', 3);
-        request.onerror = () => reject(new Error('Failed to open database'));
-        request.onupgradeneeded = (event) => {
-            const db = event.target.result;
-            // Create WordTranslations store if it doesn't exist
-            if (!db.objectStoreNames.contains('WordTranslations')) {
-                const store = db.createObjectStore('WordTranslations', {
-                    keyPath: ['word', 'originalLanguage', 'targetLanguage'],
-                });
-                store.createIndex('byLastAccessed', 'lastAccessedDays', { unique: false });
-            }
-        };
-        request.onsuccess = (event) => {
-            resolve(event.target.result);
-        };
-    });
-}
-/**
  * Get word translation cache count from tabs
  * Note: Word cache is stored in web page origins (via content script), not extension origin.
  * So we must ask content scripts for the count.
@@ -231,13 +225,7 @@ function openCacheDatabase() {
  */
 async function getWordCacheCount() {
     try {
-        const tabs = await chrome.tabs.query({});
-        const countPromises = tabs.map(tab => {
-            return chrome.tabs.sendMessage(tab.id, { action: 'getWordCacheCount' })
-                .then(response => response?.count || 0)
-                .catch(() => 0);
-        });
-        const counts = await Promise.all(countPromises);
+        const counts = await requestCountFromYleTabs('getWordCacheCount');
         // Return the max count from any tab (they all share the same per-origin cache)
         // Using max because the same origin's cache will be reported by multiple tabs
         return Math.max(0, ...counts);
@@ -252,13 +240,7 @@ async function getWordCacheCount() {
  */
 async function getSubtitleCacheCount() {
     try {
-        const tabs = await chrome.tabs.query({});
-        const countPromises = tabs.map(tab => {
-            return chrome.tabs.sendMessage(tab.id, { action: 'getSubtitleCacheCount' })
-                .then(response => response?.count || 0)
-                .catch(() => 0);
-        });
-        const counts = await Promise.all(countPromises);
+        const counts = await requestCountFromYleTabs('getSubtitleCacheCount');
         return counts.reduce((sum, c) => sum + c, 0);
     }
     catch (error) {
@@ -283,13 +265,7 @@ async function getCacheCounts() {
 async function clearSubtitleCachesInTabs() {
     let subtitleCount = 0;
     try {
-        const tabs = await chrome.tabs.query({});
-        const clearPromises = tabs.map(tab => {
-            return chrome.tabs.sendMessage(tab.id, { action: 'clearSubtitleCache' })
-                .then(response => response?.count || 0)
-                .catch(() => 0);
-        });
-        const counts = await Promise.all(clearPromises);
+        const counts = await requestCountFromYleTabs('clearSubtitleCache');
         subtitleCount = counts.reduce((sum, c) => sum + c, 0);
     }
     catch (error) {

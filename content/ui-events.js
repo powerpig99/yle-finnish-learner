@@ -330,9 +330,7 @@ document.addEventListener('dscCaptionsStateChanged', (e) => {
 document.addEventListener('yleSourceLanguageDetected', (e) => {
     const { language } = e.detail;
     detectedSourceLanguage = language;
-    if (typeof ControlIntegration !== 'undefined') {
-        ControlIntegration.setSourceLanguage(language);
-    }
+    ControlIntegration.setSourceLanguage(language);
     console.info('DualSubExtension: YLE source language detected:', language);
 });
 // Handle YLE native captions toggle (when user disables subtitles via YLE menu)
@@ -344,11 +342,9 @@ document.addEventListener('yleNativeCaptionsToggled', (e) => {
     // 1) Native CC emits `yleNativeCaptionsToggled`
     // 2) setCaptionsEnabled may emit `dscExtensionToggle` when effective state changes
     // 3) `dscExtensionToggle` listener above owns overlay/native visibility switching
-    if (typeof ControlIntegration !== 'undefined') {
-        ControlIntegration.setCaptionsEnabled(enabled);
-        const state = ControlIntegration.getState();
-        effectiveExtensionEnabled = state.extensionEnabled;
-    }
+    ControlIntegration.setCaptionsEnabled(enabled);
+    const state = ControlIntegration.getState();
+    effectiveExtensionEnabled = state.extensionEnabled;
     extensionEnabled = effectiveExtensionEnabled;
     if (!enabled || !effectiveExtensionEnabled) {
         clearAutoPause();

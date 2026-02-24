@@ -142,10 +142,8 @@ async function handleBatchTranslation(subtitles) {
     console.info(`YleDualSubExtension: Pre-populated ${subtitleTimestamps.length} timestamps and ${fullSubtitles.length} full subtitles`);
     // Sync ACCUMULATED subtitles with ControlIntegration for skip/repeat functionality
     // Note: Call setSubtitles even if panel isn't mounted yet - it just stores the data
-    if (typeof ControlIntegration !== 'undefined') {
-        ControlIntegration.setSubtitles(fullSubtitles);
-        console.info('YleDualSubExtension: Synced', fullSubtitles.length, 'accumulated subtitles with ControlIntegration');
-    }
+    ControlIntegration.setSubtitles(fullSubtitles);
+    console.info('YleDualSubExtension: Synced', fullSubtitles.length, 'accumulated subtitles with ControlIntegration');
     // Filter out subtitles that are already translated (from cache)
     const untranslatedSubtitles = subtitles.filter(sub => {
         const key = toTranslationKey(sub.text);

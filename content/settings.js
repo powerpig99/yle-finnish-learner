@@ -114,15 +114,6 @@ function applyPlaybackSpeed() {
         video.playbackRate = playbackSpeed;
     }
 }
-/**
- * Save playback speed to chrome storage
- * @param {number} speed - The playback speed to save
- */
-function savePlaybackSpeed(speed) {
-    playbackSpeed = speed;
-    chrome.storage.sync.set({ playbackSpeed: speed });
-    applyPlaybackSpeed();
-}
 // Track video element to reapply speed on new videos
 let lastVideoElement = null;
 // Subtitle font size setting (small, medium, large, xlarge)
@@ -282,25 +273,23 @@ async function checkHasValidProvider() {
  */
 function _handleDualSubBehaviourBasedOnSelectedToken(hasSelectedToken) {
     // Unified control panel migration: warning state is managed by dsc panel.
-    if (typeof ControlIntegration !== 'undefined') {
-        ControlIntegration.updateState({
-            showWarning: !hasSelectedToken,
-            warningMessage: hasSelectedToken ? '' : 'Translation provider not configured'
-        });
-    }
+    ControlIntegration.updateState({
+        showWarning: !hasSelectedToken,
+        warningMessage: hasSelectedToken ? '' : 'Translation provider not configured'
+    });
 }
 // Auto-pause timeout ID for the setTimeout-based approach
 let _autoPauseTimeout = null;
 let _autoPauseLookupRetryCount = 0;
 const AUTO_PAUSE_LOOKUP_RETRY_LIMIT = 3;
 const AUTO_PAUSE_LOOKUP_RETRY_DELAY_MS = 120;
-// Current subtitle endTime, set by subtitle-dom.ts when a subtitle is displayed.
+// Current subtitle endTime, set by subtitle-dom.js when a subtitle is displayed.
 // This is the source of truth for auto-pause — avoids time-based lookup issues
 // where DOM mutation fires ~20-30ms before VTT startTime.
 let _currentSubtitleEndTime = null;
 /**
  * Set the current subtitle's endTime for auto-pause scheduling.
- * Called from subtitle-dom.ts when a subtitle is displayed and matched against fullSubtitles.
+ * Called from subtitle-dom.js when a subtitle is displayed and matched against fullSubtitles.
  * @param {number | null} endTime - The endTime of the current subtitle, or null to clear
  */
 function setCurrentSubtitleEndTime(endTime) {
@@ -449,9 +438,7 @@ async function loadAutoPausePreference() {
  * Update auto-pause switch UI to match current state
  */
 function updateAutoPauseSwitchUI() {
-    if (typeof ControlIntegration !== 'undefined') {
-        ControlIntegration.updateState({ autoPauseEnabled });
-    }
+    ControlIntegration.updateState({ autoPauseEnabled });
     const autoPauseCheckbox = document.getElementById('dsc-auto-pause-checkbox');
     if (autoPauseCheckbox) {
         autoPauseCheckbox.checked = autoPauseEnabled;
@@ -479,7 +466,7 @@ function startSettingsBootstrap() {
 }
 /**
  * Wait until settings/state bootstrap is complete.
- * Used by contentscript.ts to avoid init races with stale defaults.
+ * Used by contentscript.js to avoid init races with stale defaults.
  */
 function waitForSettingsBootstrap() {
     return startSettingsBootstrap();
@@ -520,10 +507,8 @@ chrome.storage.onChanged.addListener((changes, areaName) => {
         if (newEnabled !== extensionEnabled) {
             extensionEnabled = newEnabled;
             console.info('DualSubExtension: Extension enabled changed via storage:', newEnabled);
-            // Update control integration if available
-            if (typeof ControlIntegration !== 'undefined') {
-                ControlIntegration.updateState({ extensionEnabled: newEnabled });
-            }
+            // Update control integration state
+            ControlIntegration.updateState({ extensionEnabled: newEnabled });
         }
     }
     if (changes.targetLanguage) {
@@ -533,9 +518,7 @@ chrome.storage.onChanged.addListener((changes, areaName) => {
         window._targetLanguage = newTargetLanguage;
         console.info('DualSubExtension: Target language changed via storage:', newTargetLanguage);
         // Update control integration and recalculate activation
-        if (typeof ControlIntegration !== 'undefined') {
-            ControlIntegration.setTargetLanguage(newTargetLanguage);
-        }
+        ControlIntegration.setTargetLanguage(newTargetLanguage);
         // Refresh translation state in-page without forcing a YLE player reload.
         if (previousTargetLanguage !== newTargetLanguage) {
             document.dispatchEvent(new CustomEvent('dscTargetLanguageChanged', {

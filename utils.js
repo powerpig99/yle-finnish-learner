@@ -14,7 +14,6 @@ let extensionContextInvalidated = false;
  * Check if the extension context is still valid
  * @returns {boolean} - True if context is valid, false if invalidated
  */
-// eslint-disable-next-line no-unused-vars
 function isExtensionContextValid() {
   if (extensionContextInvalidated) {
     return false;
@@ -36,7 +35,6 @@ function isExtensionContextValid() {
  * @param {string|string[]} keys - Keys to retrieve
  * @returns {Promise<Object>} - Storage result or empty object if context invalid
  */
-// eslint-disable-next-line no-unused-vars
 async function safeStorageGet(keys) {
   if (!isExtensionContextValid()) {
     return {};
@@ -57,7 +55,6 @@ async function safeStorageGet(keys) {
  * @param {Object} items - Items to store
  * @returns {Promise<boolean>} - True if successful, false if failed
  */
-// eslint-disable-next-line no-unused-vars
 async function safeStorageSet(items) {
   if (!isExtensionContextValid()) {
     return false;
@@ -79,7 +76,6 @@ async function safeStorageSet(items) {
  * @param {Object} message - Message to send
  * @returns {Promise<any>} - Response or null if context invalid
  */
-// eslint-disable-next-line no-unused-vars
 async function safeSendMessage(message) {
   if (!isExtensionContextValid()) {
     showExtensionInvalidatedToast();
@@ -102,7 +98,6 @@ async function safeSendMessage(message) {
  * Only shows once per page session
  */
 let toastShown = false;
-// eslint-disable-next-line no-unused-vars
 function showExtensionInvalidatedToast() {
   if (toastShown) return;
   // Guard: Don't run in service worker (no document)
@@ -174,34 +169,9 @@ const WIKTIONARY_LANG_MAP = {
  * @param {string} targetLang - Target language code (e.g., 'en', 'zh', 'EN-US')
  * @returns {string} - Wiktionary subdomain (defaults to 'en')
  */
-// eslint-disable-next-line no-unused-vars
 function getWiktionaryLang(targetLang) {
   const normalized = normalizeLanguageCode(targetLang);
   return WIKTIONARY_LANG_MAP[normalized] || 'en';
-}
-
-/**
- * Get the Wiktionary URL for a word in the target language
- * @param {string} word - The word to look up
- * @param {string} targetLang - Target language code
- * @returns {string} - Full Wiktionary URL
- */
-// eslint-disable-next-line no-unused-vars
-function getWiktionaryUrl(word, targetLang) {
-  const lang = getWiktionaryLang(targetLang);
-  return `https://${lang}.wiktionary.org/wiki/${encodeURIComponent(word)}`;
-}
-
-/**
- * Get the Wiktionary API URL for a word
- * @param {string} word - The word to look up
- * @param {string} targetLang - Target language code
- * @returns {string} - Wiktionary API URL
- */
-// eslint-disable-next-line no-unused-vars
-function getWiktionaryApiUrl(word, targetLang) {
-  const lang = getWiktionaryLang(targetLang);
-  return `https://${lang}.wiktionary.org/api/rest_v1/page/definition/${encodeURIComponent(word)}`;
 }
 
 // ================================
@@ -250,7 +220,6 @@ const LANGUAGE_CODE_MAP = {
  * @param {string} langCode - The language code to normalize (e.g., 'EN-US', 'en', 'english')
  * @returns {string} - Normalized two-letter code (e.g., 'en')
  */
-// eslint-disable-next-line no-unused-vars
 function normalizeLanguageCode(langCode) {
   if (!langCode || typeof langCode !== 'string') {
     return 'en'; // Default to English
@@ -285,7 +254,6 @@ function normalizeLanguageCode(langCode) {
  * @param {string} lang2 - Second language code
  * @returns {boolean} - True if languages are the same
  */
-// eslint-disable-next-line no-unused-vars
 function isSameLanguage(lang1, lang2) {
   return normalizeLanguageCode(lang1) === normalizeLanguageCode(lang2);
 }
@@ -299,7 +267,6 @@ function isSameLanguage(lang1, lang2) {
  *
  * @returns {Promise<string>} - Normalized target language code
  */
-// eslint-disable-next-line no-unused-vars
 async function getEffectiveTargetLanguage() {
   try {
     // 1. Check user-configured target language
@@ -334,7 +301,6 @@ async function getEffectiveTargetLanguage() {
  * Load extension enabled state from storage
  * @returns {Promise<boolean>} - Whether the extension is enabled
  */
-// eslint-disable-next-line no-unused-vars
 async function loadExtensionEnabledFromStorage() {
   try {
     const result = await chrome.storage.sync.get('extensionEnabled');
@@ -351,7 +317,6 @@ async function loadExtensionEnabledFromStorage() {
  * @param {boolean} enabled - Whether the extension should be enabled
  * @returns {Promise<void>}
  */
-// eslint-disable-next-line no-unused-vars
 async function saveExtensionEnabledToStorage(enabled) {
   try {
     await chrome.storage.sync.set({ extensionEnabled: enabled });
@@ -368,7 +333,6 @@ async function saveExtensionEnabledToStorage(enabled) {
  * Load all information
  * @returns {Promise<string>} return target language code (e.g., 'EN-US')
  */
-// eslint-disable-next-line no-unused-vars
 async function loadTargetLanguageFromChromeStorageSync() {
   try {
     const storageSyncInformation = await chrome.storage.sync.get("targetLanguage");
