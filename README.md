@@ -94,19 +94,19 @@ Click the extension icon → Settings to:
 
 ```
 ├── manifest.json           # Chrome extension manifest (v3)
-├── background.ts           # Service worker source (compiled to dist/)
-├── contentscript.ts        # Main content script source (compiled to dist/)
-├── content/                # Content-script modules (compiled to dist/content/)
-│   ├── settings.ts         # Settings + state management
-│   ├── word-translation.ts # Popup dictionary + tooltip logic
-│   ├── subtitle-dom.ts     # Subtitle DOM + mutation observers
-│   └── ui-events.ts        # Mouse/focus handling + UI event listeners
-│   └── runtime-messages.ts # Popup + runtime message handlers
+├── background.js           # Service worker (direct source)
+├── contentscript.js        # Main content script (direct source)
+├── content/                # Content-script modules (direct source)
+│   ├── settings.js         # Settings + state management
+│   ├── word-translation.js # Popup dictionary + tooltip logic
+│   ├── subtitle-dom.js     # Subtitle DOM + mutation observers
+│   ├── ui-events.js        # Mouse/focus handling + UI event listeners
+│   └── runtime-messages.js # Popup + runtime message handlers
 ├── database.js             # IndexedDB caching
 ├── styles.css              # UI styling
 ├── popup.html/js           # Extension popup
 ├── platforms/
-│   └── yle/                # YLE Areena adapter (source in .ts)
+│   └── yle/                # YLE Areena injected adapter
 ├── controls/               # Unified control panel
 │   ├── control-panel.js    # UI components
 │   ├── control-actions.js  # Action handlers
@@ -118,10 +118,8 @@ Click the extension icon → Settings to:
 ### Building
 
 ```bash
-# Build core extension scripts (TypeScript)
-npm run build:extension
-
-# Options page requires no build step (vanilla HTML/CSS/JS)
+# No build step required.
+# Source files are shipped directly.
 ```
 
 ### Engineering Principle

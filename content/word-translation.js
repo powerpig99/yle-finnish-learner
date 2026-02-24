@@ -584,4 +584,3 @@ document.addEventListener("keydown", (e) => {
         hideTooltip();
     }
 });
-//# sourceMappingURL=word-translation.js.map

@@ -1061,4 +1061,3 @@ function getLanguageName(langCode) {
     };
     return languages[langCode] || langCode;
 }
-//# sourceMappingURL=background.js.map

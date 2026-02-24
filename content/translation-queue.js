@@ -225,4 +225,3 @@ async function handleBatchTranslation(subtitles) {
     hideBatchTranslationIndicator();
     console.info("YleDualSubExtension: Batch translation completed");
 }
-//# sourceMappingURL=translation-queue.js.map

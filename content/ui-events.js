@@ -354,4 +354,3 @@ document.addEventListener('yleNativeCaptionsToggled', (e) => {
         clearAutoPause();
     }
 });
-//# sourceMappingURL=ui-events.js.map

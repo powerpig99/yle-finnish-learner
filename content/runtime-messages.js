@@ -83,4 +83,3 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     }
     return true; // Keep channel open for async response
 });
-//# sourceMappingURL=runtime-messages.js.map

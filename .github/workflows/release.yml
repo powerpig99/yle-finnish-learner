@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: 'Release version (e.g., 0.8.1)'
+        description: 'Release version (e.g., 5.3.0)'
         required: true
         type: string
 
@@ -30,8 +30,8 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Build extension
-        run: npm run build:extension
+      - name: Run tests
+        run: npm test
 
       - name: Package extension
         run: |

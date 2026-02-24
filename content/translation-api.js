@@ -91,4 +91,3 @@ async function fetchTranslation(rawSubtitleFinnishTexts) {
     }
     return [false, 'Translation failed after retries'];
 }
-//# sourceMappingURL=translation-api.js.map

@@ -3,15 +3,15 @@ rm -f yle-dual-sub-extension.zip
 zip -r yle-dual-sub-extension.zip \
   manifest.json \
   icons/icon.png \
-  dist/background.js \
-  dist/contentscript.js \
-  dist/content/settings.js \
-  dist/content/translation-api.js \
-  dist/content/translation-queue.js \
-  dist/content/word-translation.js \
-  dist/content/subtitle-dom.js \
-  dist/content/ui-events.js \
-  dist/content/runtime-messages.js \
+  background.js \
+  contentscript.js \
+  content/settings.js \
+  content/translation-api.js \
+  content/translation-queue.js \
+  content/word-translation.js \
+  content/subtitle-dom.js \
+  content/ui-events.js \
+  content/runtime-messages.js \
   database.js \
   utils.js \
   inject.js \

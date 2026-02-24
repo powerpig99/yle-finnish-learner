@@ -376,4 +376,3 @@ document.addEventListener("sendBatchTranslationEvent", (e) => {
 // ==================================
 // END UNIFIED CONTROL PANEL SECTION
 // ==================================
-//# sourceMappingURL=contentscript.js.map

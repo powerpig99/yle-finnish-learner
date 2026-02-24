@@ -429,4 +429,3 @@ if (document.body instanceof Node) {
         subtree: true,
     });
 }
-//# sourceMappingURL=subtitle-dom.js.map

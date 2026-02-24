@@ -544,4 +544,3 @@ chrome.storage.onChanged.addListener((changes, areaName) => {
         }
     }
 });
-//# sourceMappingURL=settings.js.map
