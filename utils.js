@@ -99,6 +99,15 @@ function showExtensionInvalidatedToast() {
   }, 30000);
 }
 
+/**
+ * Promise-based sleep helper for async retry/backoff flows.
+ * @param {number} ms
+ * @returns {Promise<void>}
+ */
+function sleep(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
 // ================================
 // Wiktionary Language Utilities
 // ================================
@@ -221,16 +230,6 @@ function normalizeLanguageCode(langCode) {
 
   // Default to the input lowercased (best effort)
   return withoutRegion || 'en';
-}
-
-/**
- * Compare two language codes for equality (after normalization)
- * @param {string} lang1 - First language code
- * @param {string} lang2 - Second language code
- * @returns {boolean} - True if languages are the same
- */
-function isSameLanguage(lang1, lang2) {
-  return normalizeLanguageCode(lang1) === normalizeLanguageCode(lang2);
 }
 
 /**

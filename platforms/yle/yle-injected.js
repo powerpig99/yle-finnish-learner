@@ -600,7 +600,6 @@ const WebVTTCueTextParser = function (line, errorHandler, mode, entities) {
             } else if (token[0] == "end tag") {
                 if (mode == "chapters")
                     err("End tags not allowed in chapter title text.")
-                // XXX check <ruby> content
                 if (token[1] == current.name) {
                     current = current.parent
                 } else if (token[1] == "ruby" && current.name == "rt") {

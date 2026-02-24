@@ -104,19 +104,6 @@ function getProviderById(providerId) {
   return PROVIDERS.find((provider) => provider.id === providerId) || null;
 }
 
-function getFontSizeIndex(fontSizeValue) {
-  const index = FONT_SIZES.findIndex((item) => item.value === fontSizeValue);
-  return index >= 0 ? index : 1;
-}
-
-function isValidLanguageCode(code) {
-  return LANGUAGES.some((lang) => lang.code === code);
-}
-
-function isValidFontSize(value) {
-  return FONT_SIZES.some((size) => size.value === value);
-}
-
 function updateProviderSelection() {
   const radios = dom.providerList.querySelectorAll('input[type="radio"][name="provider"]');
   for (const radio of radios) {
@@ -146,19 +133,11 @@ function updateApiKeySection() {
   }
 }
 
-function updateLanguageSelection() {
-  dom.languageSelect.value = state.targetLanguage;
-}
-
 function updateSliderValue() {
-  const index = getFontSizeIndex(state.subtitleFontSize);
-  dom.sizeSlider.value = String(index);
-  dom.sliderValue.textContent = FONT_SIZES[index].tooltip;
-}
-
-function updateCacheCounts() {
-  dom.wordCacheCount.textContent = `${state.cacheCounts.wordCount} entries`;
-  dom.subtitleCacheCount.textContent = `${state.cacheCounts.subtitleCount} entries`;
+  const index = FONT_SIZES.findIndex((item) => item.value === state.subtitleFontSize);
+  const safeIndex = index >= 0 ? index : 1;
+  dom.sizeSlider.value = String(safeIndex);
+  dom.sliderValue.textContent = FONT_SIZES[safeIndex].tooltip;
 }
 
 function buildProviderList() {
@@ -209,7 +188,8 @@ async function refreshCacheCounts() {
     if (response && response.success) {
       state.cacheCounts.wordCount = response.wordCount || 0;
       state.cacheCounts.subtitleCount = response.subtitleCount || 0;
-      updateCacheCounts();
+      dom.wordCacheCount.textContent = `${state.cacheCounts.wordCount} entries`;
+      dom.subtitleCacheCount.textContent = `${state.cacheCounts.subtitleCount} entries`;
     }
   } catch (error) {
     console.error('Failed to get cache counts:', error);
@@ -345,11 +325,15 @@ async function loadSettings() {
       kimi: typeof result.kimiApiKey === 'string' ? result.kimiApiKey : '',
     };
 
-    if (typeof result.targetLanguage === 'string' && result.targetLanguage.length > 0 && isValidLanguageCode(result.targetLanguage)) {
+    if (
+      typeof result.targetLanguage === 'string' &&
+      result.targetLanguage.length > 0 &&
+      LANGUAGES.some((lang) => lang.code === result.targetLanguage)
+    ) {
       state.targetLanguage = result.targetLanguage;
     }
 
-    if (typeof result.subtitleFontSize === 'string' && isValidFontSize(result.subtitleFontSize)) {
+    if (typeof result.subtitleFontSize === 'string' && FONT_SIZES.some((size) => size.value === result.subtitleFontSize)) {
       state.subtitleFontSize = result.subtitleFontSize;
     }
   } catch (error) {
@@ -358,7 +342,7 @@ async function loadSettings() {
 
   updateProviderSelection();
   updateApiKeySection();
-  updateLanguageSelection();
+  dom.languageSelect.value = state.targetLanguage;
   updateSliderValue();
 }
 

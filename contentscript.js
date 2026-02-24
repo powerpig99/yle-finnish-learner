@@ -219,9 +219,6 @@ function hideBatchTranslationIndicator() {
 // ==================================
 // SECTION 3.55: MOUSE ACTIVITY TRACKING
 // ==================================
-async function sleep(ms) {
-    return new Promise(resolve => setTimeout(resolve, ms));
-}
 /**
  * Add Dual Sub extension section to the video player's bottom control bar
  * next to the volume control.

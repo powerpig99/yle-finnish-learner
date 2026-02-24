@@ -331,13 +331,6 @@ const ControlIntegration = {
       }));
     }
 
-    document.dispatchEvent(new CustomEvent('dscCaptionsStateChanged', {
-      detail: {
-        captionsEnabled: this._captionsEnabled,
-        extensionEnabled: this._state.extensionEnabled,
-        dualSubEnabled: this._state.dualSubEnabled
-      }
-    }));
   },
 
   /**
@@ -360,13 +353,12 @@ const ControlIntegration = {
     }
 
     // Dispatch event for contentscript.js to handle
-    const event = new CustomEvent('dscExtensionToggle', {
+    document.dispatchEvent(new CustomEvent('dscExtensionToggle', {
       detail: {
         enabled: this._state.extensionEnabled,
         dualSubEnabled: this._state.dualSubEnabled
       }
-    });
-    document.dispatchEvent(event);
+    }));
 
     console.info('DualSubExtension: Extension toggled:', enabled, 'effective:', this._state.extensionEnabled);
   },
@@ -472,10 +464,9 @@ const ControlIntegration = {
     chrome.storage.sync.set({ dualSubEnabled: enabled });
 
     // Dispatch event for contentscript.js to handle
-    const event = new CustomEvent('dscDualSubToggle', {
+    document.dispatchEvent(new CustomEvent('dscDualSubToggle', {
       detail: { enabled }
-    });
-    document.dispatchEvent(event);
+    }));
 
     console.info('DualSubExtension: Dual sub toggled:', enabled);
   },
@@ -492,10 +483,9 @@ const ControlIntegration = {
     chrome.storage.sync.set({ autoPauseEnabled: enabled });
 
     // Dispatch event for contentscript.js
-    const event = new CustomEvent('dscAutoPauseToggle', {
+    document.dispatchEvent(new CustomEvent('dscAutoPauseToggle', {
       detail: { enabled }
-    });
-    document.dispatchEvent(event);
+    }));
 
     console.info('DualSubExtension: Auto-pause toggled:', enabled);
   },
@@ -506,10 +496,6 @@ const ControlIntegration = {
    */
   _handlePrevSubtitle() {
     ControlActions.skipToPreviousSubtitle();
-
-    // Dispatch event for contentscript.js
-    const event = new CustomEvent('dscPrevSubtitle', { detail: {} });
-    document.dispatchEvent(event);
   },
 
   /**
@@ -518,10 +504,6 @@ const ControlIntegration = {
    */
   _handleNextSubtitle() {
     ControlActions.skipToNextSubtitle();
-
-    // Dispatch event for contentscript.js
-    const event = new CustomEvent('dscNextSubtitle', { detail: {} });
-    document.dispatchEvent(event);
   },
 
   /**
@@ -547,10 +529,9 @@ const ControlIntegration = {
     chrome.storage.sync.set({ playbackSpeed: speed });
 
     // Dispatch event for contentscript.js
-    const event = new CustomEvent('dscSpeedChange', {
+    document.dispatchEvent(new CustomEvent('dscSpeedChange', {
       detail: { speed }
-    });
-    document.dispatchEvent(event);
+    }));
   },
 
   /**
@@ -565,10 +546,9 @@ const ControlIntegration = {
     chrome.storage.sync.set({ ytSourceLanguage: lang });
 
     // Dispatch event for contentscript.js
-    const event = new CustomEvent('dscSourceLangChange', {
+    document.dispatchEvent(new CustomEvent('dscSourceLangChange', {
       detail: { language: lang }
-    });
-    document.dispatchEvent(event);
+    }));
 
     console.info('DualSubExtension: Source language changed:', lang);
   },
@@ -586,13 +566,7 @@ const ControlIntegration = {
    * @private
    */
   _handlePlayPause() {
-    const isPaused = ControlActions.togglePlayPause();
-
-    // Dispatch event for contentscript.js
-    const event = new CustomEvent('dscPlayPause', {
-      detail: { isPaused }
-    });
-    document.dispatchEvent(event);
+    ControlActions.togglePlayPause();
   },
 
   /**

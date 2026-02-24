@@ -194,14 +194,6 @@ async function requestCountFromYleTabs(action) {
     return Promise.all(countPromises);
 }
 
-function maxCount(counts) {
-    return Math.max(0, ...counts);
-}
-
-function sumCounts(counts) {
-    return counts.reduce((sum, count) => sum + count, 0);
-}
-
 async function aggregateYleTabCounts(action, aggregate, onError = null) {
     try {
         const counts = await requestCountFromYleTabs(action);
@@ -224,7 +216,7 @@ async function clearWordTranslationCache() {
     // Return the max count cleared (same origin cache is shared across tabs)
     const maxCleared = await aggregateYleTabCounts(
         'clearWordCache',
-        maxCount,
+        (counts) => Math.max(0, ...counts),
         (error) => console.error('YleDualSubExtension: Failed to clear word cache:', error)
     );
     console.info(`YleDualSubExtension: Cleared ${maxCleared} word translations from cache`);
@@ -237,8 +229,8 @@ async function clearWordTranslationCache() {
 async function getCacheCounts() {
     const [wordCount, subtitleCount] = await Promise.all([
         // Word cache is shared per origin; use max across YLE tabs.
-        aggregateYleTabCounts('getWordCacheCount', maxCount),
-        aggregateYleTabCounts('getSubtitleCacheCount', sumCounts)
+        aggregateYleTabCounts('getWordCacheCount', (counts) => Math.max(0, ...counts)),
+        aggregateYleTabCounts('getSubtitleCacheCount', (counts) => counts.reduce((sum, count) => sum + count, 0))
     ]);
     return { wordCount, subtitleCount };
 }
@@ -249,7 +241,7 @@ async function getCacheCounts() {
 async function clearSubtitleCachesInTabs() {
     const subtitleCount = await aggregateYleTabCounts(
         'clearSubtitleCache',
-        sumCounts,
+        (counts) => counts.reduce((sum, count) => sum + count, 0),
         (error) => console.warn('YleDualSubExtension: Error clearing subtitle caches:', error)
     );
     console.info(`YleDualSubExtension: Cleared ${subtitleCount} subtitle translations`);
@@ -258,9 +250,6 @@ async function clearSubtitleCachesInTabs() {
 // ==================================
 // TRANSLATION ROUTER
 // ==================================
-async function backgroundSleep(ms) {
-    return new Promise(resolve => setTimeout(resolve, ms));
-}
 function calculateBackoffDelay(attempt) {
     // Start with 1 second and double each time: 1s, 2s, 4s
     const exponentialDelay = 1000 * Math.pow(2, attempt);
@@ -285,7 +274,7 @@ async function translateTextsWithErrorHandling(texts, targetLanguage) {
             const errorMsg = result[1];
             if (typeof errorMsg === 'string' && errorMsg.includes('rate limit')) {
                 if (attempt < MAX_RETRIES - 1) {
-                    await backgroundSleep(calculateBackoffDelay(attempt));
+                    await sleep(calculateBackoffDelay(attempt));
                     continue;
                 }
             }
@@ -293,7 +282,7 @@ async function translateTextsWithErrorHandling(texts, targetLanguage) {
         }
         catch (error) {
             if (attempt < MAX_RETRIES - 1) {
-                await backgroundSleep(calculateBackoffDelay(attempt));
+                await sleep(calculateBackoffDelay(attempt));
                 continue;
             }
             return [false, error.message || 'Translation failed'];
@@ -599,7 +588,7 @@ async function translateWithGoogle(texts, targetLanguage) {
             const text = texts[index];
             // Add delay between requests to avoid rate limiting (except for first request)
             if (index > 0) {
-                await backgroundSleep(200); // 200ms delay between requests (increased from 150ms)
+                await sleep(200); // 200ms delay between requests (increased from 150ms)
             }
             // Use sl=auto for auto-detection of source language (not hardcoded to Finnish)
             const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=${googleLang}&dt=t&q=${encodeURIComponent(text)}`;

@@ -65,7 +65,7 @@ function shouldTranslate() {
     if (!detectedSourceLanguage) {
         return true;
     }
-    if (isSameLanguage(detectedSourceLanguage, targetLanguage)) {
+    if (normalizeLanguageCode(detectedSourceLanguage) === normalizeLanguageCode(targetLanguage)) {
         return false;
     }
     return true;

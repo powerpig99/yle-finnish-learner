@@ -179,10 +179,6 @@ document.addEventListener('click', (e) => {
 // ==================================
 // UI EVENT LISTENERS
 // ==================================
-function getOriginalSubtitlesWrapper() {
-    return getNativeSubtitlesWrapper();
-}
-
 function renderCurrentSubtitleImmediately(originalSubtitlesWrapper) {
     const displayedSubtitlesWrapper = createAndPositionDisplayedSubtitlesWrapper(originalSubtitlesWrapper);
     displayedSubtitlesWrapper.innerHTML = '';
@@ -201,7 +197,7 @@ document.addEventListener('dscDualSubToggle', (e) => {
     dualSubEnabled = enabled;
     // Handle dual sub toggle logic for YLE
     if (enabled) {
-        const originalSubtitlesWrapper = getOriginalSubtitlesWrapper();
+        const originalSubtitlesWrapper = getNativeSubtitlesWrapper();
         if (originalSubtitlesWrapper) {
             originalSubtitlesWrapper.classList.add('dsc-original-hidden');
             renderCurrentSubtitleImmediately(originalSubtitlesWrapper);
@@ -243,20 +239,12 @@ document.addEventListener('dscTargetLanguageChanged', () => {
     sharedTranslationMap.clear();
     // Drop pending queue items from the previous language context.
     translationQueue.queue.length = 0;
-    const originalSubtitlesWrapper = getOriginalSubtitlesWrapper();
-    const displayedSubtitlesWrapper = document.getElementById('displayed-subtitles-wrapper');
-    if (!originalSubtitlesWrapper || !displayedSubtitlesWrapper) {
+    const originalSubtitlesWrapper = getNativeSubtitlesWrapper();
+    if (!originalSubtitlesWrapper) {
         return;
     }
     // Re-render current subtitle immediately, then let queue fetch new-language translations.
-    displayedSubtitlesWrapper.innerHTML = '';
-    const originalSubtitleElements = getSubtitleTextElements(originalSubtitlesWrapper);
-    if (originalSubtitleElements.length > 0) {
-        addContentToDisplayedSubtitlesWrapper(displayedSubtitlesWrapper, originalSubtitleElements);
-        translationQueue.processQueue().catch((error) => {
-            console.error('DualSubExtension: Failed to refresh translations after target language change:', error);
-        });
-    }
+    renderCurrentSubtitleImmediately(originalSubtitlesWrapper);
 });
 // Handle extension toggle from control panel
 // Simplified: no auto-sync, user controls everything
@@ -278,7 +266,7 @@ document.addEventListener('dscExtensionToggle', (e) => {
             displayedSubtitlesWrapper.style.display = 'none';
         }
         // Show the original YLE subtitle wrapper
-        const originalWrapper = getOriginalSubtitlesWrapper();
+        const originalWrapper = getNativeSubtitlesWrapper();
         if (originalWrapper) {
             originalWrapper.classList.remove('dsc-original-hidden');
         }
@@ -295,7 +283,7 @@ document.addEventListener('dscExtensionToggle', (e) => {
             displayedSubtitlesWrapper.style.display = 'flex';
         }
         // Hide native YLE captions when extension is enabled
-        const originalWrapper = getOriginalSubtitlesWrapper();
+        const originalWrapper = getNativeSubtitlesWrapper();
         if (originalWrapper) {
             originalWrapper.classList.add('dsc-original-hidden');
             renderCurrentSubtitleImmediately(originalWrapper);
@@ -327,16 +315,14 @@ document.addEventListener('yleSourceLanguageDetected', (e) => {
 document.addEventListener('yleNativeCaptionsToggled', (e) => {
     const { enabled } = e.detail;
     console.info('DualSubExtension: Native YLE captions toggled:', enabled);
-    let effectiveExtensionEnabled = extensionEnabled;
     // CC toggle flow:
     // 1) Native CC emits `yleNativeCaptionsToggled`
     // 2) setCaptionsEnabled may emit `dscExtensionToggle` when effective state changes
     // 3) `dscExtensionToggle` listener above owns overlay/native visibility switching
     ControlIntegration.setCaptionsEnabled(enabled);
-    const state = ControlIntegration.getState();
-    effectiveExtensionEnabled = state.extensionEnabled;
-    extensionEnabled = effectiveExtensionEnabled;
-    if (!enabled || !effectiveExtensionEnabled) {
+    const nextExtensionEnabled = ControlIntegration.getState().extensionEnabled;
+    extensionEnabled = nextExtensionEnabled;
+    if (!enabled || !nextExtensionEnabled) {
         clearAutoPause();
     }
 });
