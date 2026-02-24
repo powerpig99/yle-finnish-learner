@@ -127,33 +127,6 @@
   background: rgba(59, 130, 246, 0.4);
 }
 
-/* Auto-pause indicator */
-.auto-pause-indicator {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 4px 10px;
-  background: rgba(34, 197, 94, 0.2);
-  border: 1px solid rgba(34, 197, 94, 0.4);
-  border-radius: 4px;
-  color: #4ade80;
-  font-size: 12px;
-  font-weight: 500;
-}
-
-.auto-pause-indicator.inactive {
-  background: rgba(100, 116, 139, 0.2);
-  border-color: rgba(100, 116, 139, 0.4);
-  color: #94a3b8;
-}
-
-.auto-pause-indicator__dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: currentColor;
-}
-
 /* ============================================
    Hide cursor when inactive on player
    ============================================ */
@@ -475,52 +448,6 @@ div[class*="PlayerUI__UI"].yle-mouse-active #displayed-subtitles-wrapper {
   cursor: not-allowed;
 }
 
-/* Disabled switch (e.g., dual sub toggle when same language) */
-.dsc-switch.dsc-switch-disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-}
-
-.dsc-switch.dsc-switch-disabled .dsc-switch-knob {
-  cursor: not-allowed;
-}
-
-/* Status badge */
-.dsc-status {
-  display: inline-flex;
-  align-items: center;
-  padding: 2px 6px;
-  border-radius: 4px;
-  font-size: 9px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  white-space: nowrap;
-  background: rgba(100, 116, 139, 0.4);
-  color: rgba(255, 255, 255, 0.8);
-}
-
-.dsc-status-off {
-  background: rgba(239, 68, 68, 0.3);
-  color: #f87171;
-}
-
-.dsc-status-inactive {
-  background: rgba(251, 191, 36, 0.3);
-  color: #fbbf24;
-}
-
-.dsc-status-waiting {
-  background: rgba(59, 130, 246, 0.3);
-  color: #60a5fa;
-  animation: dsc-pulse 2s ease-in-out infinite;
-}
-
-@keyframes dsc-pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.6; }
-}
-
 /* Features container (greyed out when disabled) */
 .dsc-features {
   display: flex;
@@ -663,176 +590,6 @@ div[class*="PlayerUI__UI"].yle-mouse-active .dsc-panel.dsc-yle {
 }
 
 /* ============================================
-   Audio Download Modal Styles
-   ============================================ */
-
-/* Modal container */
-.dsc-audio-modal {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  z-index: 100000;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-}
-
-/* Dark overlay */
-.dsc-audio-modal__overlay {
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(0, 0, 0, 0.7);
-  backdrop-filter: blur(4px);
-}
-
-/* Modal content box */
-.dsc-audio-modal__content {
-  position: relative;
-  background: linear-gradient(145deg, #1e293b 0%, #0f172a 100%);
-  border-radius: 12px;
-  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.1);
-  max-width: 420px;
-  width: 90%;
-  max-height: 80vh;
-  overflow: hidden;
-  animation: dsc-modal-appear 0.2s ease-out;
-}
-
-@keyframes dsc-modal-appear {
-  from {
-    opacity: 0;
-    transform: scale(0.95) translateY(10px);
-  }
-  to {
-    opacity: 1;
-    transform: scale(1) translateY(0);
-  }
-}
-
-/* Modal header */
-.dsc-audio-modal__header {
-  padding: 16px 20px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-}
-
-.dsc-audio-modal__title {
-  margin: 0;
-  font-size: 18px;
-  font-weight: 600;
-  color: #f1f5f9;
-}
-
-/* Modal body */
-.dsc-audio-modal__body {
-  padding: 20px;
-}
-
-/* Success icon */
-.dsc-audio-modal__content--success .dsc-audio-modal__body {
-  text-align: center;
-}
-
-.dsc-audio-modal__success-icon {
-  width: 64px;
-  height: 64px;
-  margin: 0 auto 16px;
-  background: rgba(34, 197, 94, 0.2);
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.dsc-audio-modal__success-icon svg {
-  width: 32px;
-  height: 32px;
-  color: #4ade80;
-}
-
-.dsc-audio-modal__filename {
-  color: #60a5fa;
-  font-size: 14px;
-  font-weight: 500;
-  margin: 0 0 8px;
-  word-break: break-all;
-}
-
-/* Error icon */
-.dsc-audio-modal__content--error .dsc-audio-modal__body {
-  text-align: center;
-}
-
-.dsc-audio-modal__error-icon {
-  width: 64px;
-  height: 64px;
-  margin: 0 auto 16px;
-  background: rgba(239, 68, 68, 0.2);
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.dsc-audio-modal__error-icon svg {
-  width: 32px;
-  height: 32px;
-  color: #f87171;
-}
-
-.dsc-audio-modal__error-message {
-  color: #f87171;
-  font-size: 14px;
-  margin: 0;
-}
-
-/* Modal footer */
-.dsc-audio-modal__footer {
-  padding: 16px 20px;
-  border-top: 1px solid rgba(255, 255, 255, 0.1);
-  display: flex;
-  justify-content: flex-end;
-  gap: 12px;
-}
-
-/* Buttons */
-.dsc-audio-modal__btn {
-  padding: 10px 20px;
-  border-radius: 6px;
-  font-size: 14px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.15s ease;
-  border: none;
-}
-
-.dsc-audio-modal__btn--primary {
-  background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
-  color: #fff;
-}
-
-.dsc-audio-modal__btn--primary:hover {
-  background: linear-gradient(135deg, #60a5fa 0%, #3b82f6 100%);
-  transform: translateY(-1px);
-}
-
-.dsc-audio-modal__btn--secondary {
-  background: rgba(100, 116, 139, 0.2);
-  color: #94a3b8;
-  border: 1px solid rgba(100, 116, 139, 0.3);
-}
-
-.dsc-audio-modal__btn--secondary:hover {
-  background: rgba(100, 116, 139, 0.3);
-  color: #e2e8f0;
-}
-
-/* ============================================
    Audio Download Progress Bar (non-intrusive)
    ============================================ */
 
@@ -907,6 +664,12 @@ div[class*="PlayerUI__UI"].yle-mouse-active .dsc-panel.dsc-yle {
 
 .dsc-audio-progress__percent {
   color: #60a5fa;
+  font-weight: 500;
+}
+
+.dsc-audio-progress__status {
+  color: #e2e8f0;
+  font-size: 12px;
   font-weight: 500;
 }
 
@@ -997,17 +760,9 @@ div[class*="PlayerUI__UI"].yle-mouse-active .dsc-panel.dsc-yle {
     display: none;
   }
 
-  .dsc-source-lang {
-    display: none;
-  }
-
   .dsc-panel {
     gap: 4px;
     padding: 2px 4px;
   }
 
-  .dsc-audio-modal__content {
-    width: 95%;
-    max-width: none;
-  }
 }

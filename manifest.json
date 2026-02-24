@@ -23,7 +23,6 @@
         "controls/audio-filters.js",
         "controls/audio-encoder.js",
         "controls/screen-recorder.js",
-        "controls/audio-download-ui.js",
         "controls/control-panel.js",
         "controls/control-integration.js",
         "database.js",
@@ -44,13 +43,10 @@
   "host_permissions": [
     "https://areena.yle.fi/*",
     "https://api-free.deepl.com/*",
-    "https://api.deepl.com/*",
     "https://translate.googleapis.com/*",
     "https://api.anthropic.com/*",
     "https://generativelanguage.googleapis.com/*",
     "https://api.x.ai/*",
-    "https://api.moonshot.ai/*",
-    "https://api.moonshot.cn/*",
     "https://api.kimi.com/*"
   ],
   "permissions": ["storage", "downloads"],

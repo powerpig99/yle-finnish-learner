@@ -19,31 +19,16 @@ const ScreenRecorder = {
   },
 
   /**
-   * Check if screen recording is supported
-   * @returns {Object} - { supported: boolean, reason?: string }
-   */
-  checkSupport() {
-    if (!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia) {
-      return { supported: false, reason: 'Screen capture not supported in this browser' };
-    }
-    if (!window.MediaRecorder) {
-      return { supported: false, reason: 'MediaRecorder not supported' };
-    }
-    return { supported: true };
-  },
-
-  /**
    * Start screen recording
    * @param {Object} options
    * @param {function} options.onProgress - Progress callback (currentTime, totalTime, percent, phase)
    * @param {function} options.onComplete - Called when recording completes with Blob
    * @param {function} options.onError - Called on error
-   * @param {function} options.onStatusChange - Called with status text updates
    * @param {number} options.expectedDuration - Expected duration in seconds (for progress calculation)
    * @returns {Promise<void>}
    */
   async startRecording(options = {}) {
-    const { onProgress, onComplete, onError, onStatusChange, expectedDuration } = options;
+    const { onProgress, onComplete, onError, expectedDuration } = options;
 
     // Reset state
     this._state = {
@@ -55,13 +40,12 @@ const ScreenRecorder = {
     };
 
     try {
-      // Check support
-      const support = this.checkSupport();
-      if (!support.supported) {
-        throw new Error(support.reason);
+      if (!navigator.mediaDevices || typeof navigator.mediaDevices.getDisplayMedia !== 'function') {
+        throw new Error('Screen capture not supported');
       }
-
-      if (onStatusChange) onStatusChange('Requesting screen capture permission...');
+      if (!window.MediaRecorder) {
+        throw new Error('MediaRecorder not supported');
+      }
 
       // Request screen capture with audio
       // preferCurrentTab hints to capture the current tab
@@ -84,10 +68,8 @@ const ScreenRecorder = {
         );
       }
 
-      if (onStatusChange) onStatusChange('Recording screen and audio...');
-
       // Setup recorder
-      const mimeType = this._getSupportedMimeType();
+      const mimeType = 'video/webm;codecs=vp9,opus';
       const mediaRecorder = new MediaRecorder(stream, {
         mimeType: mimeType,
         videoBitsPerSecond: 2500000, // 2.5 Mbps for reasonable quality
@@ -104,8 +86,6 @@ const ScreenRecorder = {
       };
 
       mediaRecorder.onstop = () => {
-        if (onStatusChange) onStatusChange('Processing recording...');
-
         const blob = new Blob(this._state.chunks, { type: mimeType });
         this._cleanup();
 
@@ -120,7 +100,6 @@ const ScreenRecorder = {
 
       // Handle stream ending (user stopped sharing)
       stream.getVideoTracks()[0].onended = () => {
-        console.info('ScreenRecorder: User stopped sharing');
         if (this._state.isRecording && this._state.mediaRecorder?.state === 'recording') {
           this.stopRecording();
         }
@@ -186,29 +165,6 @@ const ScreenRecorder = {
 
       onProgress(elapsed, expectedDuration || 0, Math.min(percent, 100), 'recording');
     }, 500);
-  },
-
-  /**
-   * Get supported MIME type for video recording
-   * @returns {string}
-   * @private
-   */
-  _getSupportedMimeType() {
-    const types = [
-      'video/webm;codecs=vp9,opus',
-      'video/webm;codecs=vp8,opus',
-      'video/webm;codecs=h264,opus',
-      'video/webm',
-      'video/mp4'
-    ];
-
-    for (const type of types) {
-      if (MediaRecorder.isTypeSupported(type)) {
-        return type;
-      }
-    }
-
-    return 'video/webm';
   },
 
   /**

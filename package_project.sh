@@ -24,7 +24,6 @@ zip -r yle-dual-sub-extension.zip \
   controls/audio-filters.js \
   controls/audio-encoder.js \
   controls/screen-recorder.js \
-  controls/audio-download-ui.js \
   controls/control-panel.js \
   controls/control-integration.js \
   platforms/yle/yle-injected.js \

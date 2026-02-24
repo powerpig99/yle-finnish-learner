@@ -108,7 +108,6 @@ const ControlIntegration = {
       const element = this._panel.isMounted() ? this._panel.element : await this._panel.mount();
 
       if (element) {
-        console.info('DualSubExtension: ControlIntegration initialized for YLE Areena');
       } else {
         // Schedule retry mounts if initial mount fails
         this._scheduleRemount();
@@ -142,11 +141,9 @@ const ControlIntegration = {
         return;
       }
 
-      console.info(`DualSubExtension: Attempting remount (attempt ${retryIndex + 1}/${retryDelays.length})`);
       const element = await this._panel.mount();
 
       if (element) {
-        console.info('DualSubExtension: Remount successful');
         this._remountScheduled = false;
         this._remountTimer = null;
       } else if (retryIndex < retryDelays.length - 1) {
@@ -160,23 +157,6 @@ const ControlIntegration = {
     };
 
     this._remountTimer = setTimeout(attemptRemount, retryDelays[0]);
-  },
-
-
-  /**
-   * Cleanup and unmount the control panel
-   */
-  cleanup() {
-    this._remountScheduled = false;
-    if (this._remountTimer) {
-      clearTimeout(this._remountTimer);
-      this._remountTimer = null;
-    }
-    if (this._panel) {
-      this._panel.unmount();
-      this._panel = null;
-    }
-    this._subtitles = [];
   },
 
   /**
@@ -203,7 +183,6 @@ const ControlIntegration = {
    * @param {Array<{startTime: number, endTime: number, text: string}>} subtitles
    */
   setSubtitles(subtitles) {
-    console.info('DualSubExtension: ControlIntegration.setSubtitles called with', subtitles?.length, 'subtitles');
     // IMPORTANT: Copy the array, don't reference it!
     // The source array (fullSubtitles) gets cleared on navigation, which would
     // also clear _subtitles if we just stored the reference.
@@ -242,7 +221,7 @@ const ControlIntegration = {
         'dualSubEnabled',
         'autoPauseEnabled',
         'playbackSpeed',
-        'ytSourceLanguage',
+        'sourceLanguage',
         'extensionEnabled',
         'targetLanguage'
       ]);
@@ -256,8 +235,8 @@ const ControlIntegration = {
       if (typeof result.playbackSpeed === 'number') {
         this._state.playbackSpeed = result.playbackSpeed;
       }
-      if (result.ytSourceLanguage) {
-        this._state.sourceLanguage = result.ytSourceLanguage;
+      if (result.sourceLanguage) {
+        this._state.sourceLanguage = result.sourceLanguage;
       }
       // Load extensionEnabled (default to true)
       this._userExtensionEnabled = result.extensionEnabled !== false;
@@ -269,23 +248,17 @@ const ControlIntegration = {
       // Check if this is an extension context invalidation error
       if (e.message && e.message.includes('Extension context invalidated')) {
         console.warn('DualSubExtension: Extension context invalidated during preferences load');
-        showExtensionInvalidatedToast();
         return;
       }
       console.warn('DualSubExtension: Error loading preferences:', e);
     }
   },
-
-  // REMOVED: shouldBeActive() and isTranslationNeeded()
-  // User now controls everything manually - no auto-disable logic
-
   /**
    * Set whether native captions (CC button) are enabled
    * Simplified: just stores the value, no auto-enable/disable logic
    * @param {boolean} enabled - Whether CC is ON
    */
   setCaptionsEnabled(enabled) {
-    console.info('DualSubExtension: setCaptionsEnabled:', enabled);
     const previousEffective = this._state.extensionEnabled;
     this._captionsEnabled = enabled;
     this._state.extensionEnabled = this._userExtensionEnabled && this._captionsEnabled;
@@ -336,7 +309,6 @@ const ControlIntegration = {
       }
     }));
 
-    console.info('DualSubExtension: Extension toggled:', enabled, 'effective:', this._state.extensionEnabled);
   },
 
   /**
@@ -374,7 +346,6 @@ const ControlIntegration = {
     }
 
     this._state.sourceLanguage = normalized;
-    console.info('DualSubExtension: Source language set:', normalized);
 
     // Update panel UI if mounted
     if (this._panel) {
@@ -411,7 +382,6 @@ const ControlIntegration = {
       });
     }
 
-    console.info('DualSubExtension: Target language set:', normalized);
   },
 
   /**
@@ -431,7 +401,6 @@ const ControlIntegration = {
       detail: { enabled }
     }));
 
-    console.info('DualSubExtension: Dual sub toggled:', enabled);
   },
 
   /**
@@ -450,7 +419,6 @@ const ControlIntegration = {
       detail: { enabled }
     }));
 
-    console.info('DualSubExtension: Auto-pause toggled:', enabled);
   },
 
   /**
@@ -506,14 +474,13 @@ const ControlIntegration = {
     this._state.sourceLanguage = lang;
 
     // Save preference
-    chrome.storage.sync.set({ ytSourceLanguage: lang });
+    chrome.storage.sync.set({ sourceLanguage: lang });
 
     // Dispatch event for contentscript.js
     document.dispatchEvent(new CustomEvent('dscSourceLangChange', {
       detail: { language: lang }
     }));
 
-    console.info('DualSubExtension: Source language changed:', lang);
   },
 
   /**
@@ -537,12 +504,10 @@ const ControlIntegration = {
    * @private
    */
   async _handleDownloadAudio() {
-    console.info('DualSubExtension: _handleDownloadAudio called, subtitles:', this._subtitles?.length, 'isInit:', this.isInitialized());
 
     // YLE uses DRM protection - use screen recording
     // Check if already recording - if so, stop it (toggle behavior)
     if (ScreenRecorder.isRecording()) {
-      console.info('DualSubExtension: Stopping YLE screen recording');
       ScreenRecorder.stopRecording();
       return;
     }
@@ -567,11 +532,9 @@ const ControlIntegration = {
   async _startYLERecording(video) {
     // NOTE: On YLE, we cannot show any modal as it closes the video overlay
     // The browser's native screen share dialog will appear instead
-    console.info('DualSubExtension: Starting YLE screen recording (no modal to avoid closing video)');
 
     // Track when recording starts in the video timeline
     const recordingStartTime = video.currentTime;
-    console.info('DualSubExtension: Recording started at video time:', recordingStartTime);
 
     try {
       await ScreenRecorder.startRecording({
@@ -581,13 +544,8 @@ const ControlIntegration = {
           // By this point the browser's native dialog has been handled
           this._showYLERecordingProgress(currentTime, totalTime, percent);
         },
-        onStatusChange: (status) => {
-          console.info('DualSubExtension: Screen recording status:', status);
-        },
         onComplete: async (blob) => {
           const recordingEndTime = video.currentTime;
-          console.info('DualSubExtension: Recording complete, blob size:', blob.size, 'bytes');
-          console.info('DualSubExtension: Recorded video time range:', recordingStartTime, 'to', recordingEndTime);
 
           // Show processing status
           this._showYLEProcessingStatus('Extracting speech audio...');
@@ -603,7 +561,6 @@ const ControlIntegration = {
                 startTime: seg.startTime - recordingStartTime,
                 endTime: Math.min(seg.endTime, recordingEndTime) - recordingStartTime
               }));
-            console.info('DualSubExtension: Found', speechSegments.length, 'speech segments');
           }
 
           // Automatically extract speech-only MP3 (no modal)
@@ -615,10 +572,8 @@ const ControlIntegration = {
               },
               onComplete: async (mp3Blob) => {
                 this._hideYLERecordingUI();
-                console.info('DualSubExtension: Speech MP3 ready, size:', mp3Blob.size);
                 const filename = this._generateFilename();
                 await this._downloadBlob(mp3Blob, filename);
-                console.info('DualSubExtension: Download initiated:', filename);
               },
               onError: (error) => {
                 this._hideYLERecordingUI();
@@ -635,7 +590,7 @@ const ControlIntegration = {
           if (!error.message.includes('cancelled') && !error.message.includes('denied')) {
             // Only show error after recording attempt (video may already be closed)
             console.error('DualSubExtension: Screen recording error:', error.message);
-            AudioDownloadUI.showError(error.message);
+            alert(error.message);
           }
         }
       });
@@ -644,7 +599,7 @@ const ControlIntegration = {
       this._hideYLERecordingUI();
       if (!error.message.includes('cancelled') && !error.message.includes('denied')) {
         console.error('DualSubExtension: Screen recording error:', error.message);
-        AudioDownloadUI.showError(error.message);
+        alert(error.message);
       }
     }
   },
@@ -714,9 +669,6 @@ const ControlIntegration = {
 
     const processingUI = document.getElementById('dsc-yle-processing-ui');
     if (processingUI) processingUI.remove();
-
-    AudioDownloadUI.hideProgressBar();
-    AudioDownloadUI.hideModal();
   },
 
   /**
@@ -794,8 +746,6 @@ const ControlIntegration = {
    * @private
    */
   async _downloadBlob(blob, filename) {
-    console.info('DualSubExtension: Downloading blob via background script, size:', blob.size, 'filename:', filename);
-
     try {
       // Convert blob to data URL for background script
       const dataUrl = await new Promise((resolve, reject) => {
@@ -812,37 +762,13 @@ const ControlIntegration = {
         data: { dataUrl, filename }
       });
 
-      if (response && response.success) {
-        console.info('DualSubExtension: Download initiated successfully');
-      } else {
-        // Fallback to direct download if background script fails
-        console.warn('DualSubExtension: Background download failed, using fallback:', response?.error);
-        this._downloadBlobFallback(blob, filename);
+      if (!response || !response.success) {
+        throw new Error(response?.error || 'Download failed');
       }
     } catch (error) {
-      console.error('DualSubExtension: Download error, using fallback:', error);
-      this._downloadBlobFallback(blob, filename);
+      console.error('DualSubExtension: Download error:', error);
+      alert(error.message || 'Download failed');
     }
-  },
-
-  /**
-   * Fallback download method using anchor element
-   * @param {Blob} blob
-   * @param {string} filename
-   * @private
-   */
-  _downloadBlobFallback(blob, filename) {
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = filename;
-    a.style.display = 'none';
-    document.body.appendChild(a);
-    a.click();
-    setTimeout(() => {
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-    }, 100);
   },
 
   /**

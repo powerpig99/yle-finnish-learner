@@ -143,7 +143,6 @@ document.addEventListener('click', (e) => {
     if (target.closest('.dsc-panel') ||
         target.closest('.dsc-btn') ||
         target.closest('.dsc-group') ||
-        target.closest('.dsc-audio-modal') ||
         target.closest('#dsc-download-audio-btn') ||
         target.closest('#dsc-yle-recording-ui') ||
         target.closest('.dsc-audio-progress') ||
@@ -248,7 +247,6 @@ document.addEventListener('dscTargetLanguageChanged', () => {
 document.addEventListener('dscExtensionToggle', (e) => {
     const { enabled } = e.detail;
     extensionEnabled = enabled;
-    console.info('DualSubExtension: Extension toggled:', enabled);
     // When extension is disabled, restore native YLE behavior
     if (!enabled) {
         // Clear any pending auto-pause timer
@@ -299,19 +297,16 @@ document.addEventListener('dscSourceLanguageChanged', (e) => {
     if (sourceLanguage !== null) {
         detectedSourceLanguage = sourceLanguage;
     }
-    console.info('DualSubExtension: Source language changed:', sourceLanguage);
 });
 // Listen for source language detection from YLE adapter
 document.addEventListener('yleSourceLanguageDetected', (e) => {
     const { language } = e.detail;
     detectedSourceLanguage = language;
     ControlIntegration.setSourceLanguage(language);
-    console.info('DualSubExtension: YLE source language detected:', language);
 });
 // Handle YLE native captions toggle (when user disables subtitles via YLE menu)
 document.addEventListener('yleNativeCaptionsToggled', (e) => {
     const { enabled } = e.detail;
-    console.info('DualSubExtension: Native YLE captions toggled:', enabled);
     // CC toggle flow:
     // 1) Native CC emits `yleNativeCaptionsToggled`
     // 2) setCaptionsEnabled may emit `dscExtensionToggle` when effective state changes
