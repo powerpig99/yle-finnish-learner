@@ -5,9 +5,7 @@ console.info('DualSubExtension: YLE Areena extension loaded');
 // ==================================
 // SECTION 1: STATE & INITIALIZATION
 // ==================================
-/* global loadTargetLanguageFromChromeStorageSync */
 /* global openDatabase, saveSubtitlesBatch, loadSubtitlesByMovieName, upsertMovieMetadata, cleanupOldMovieData */
-/* global getWordTranslation, saveWordTranslation, cleanupOldWordTranslations, clearAllWordTranslations */
 /** @type {Map<string, string>}
  * Shared translation map, with key is normalized Finnish text, and value is translated text
  */
@@ -22,7 +20,6 @@ const sharedTranslationErrorMap = new Map();
 function toTranslationKey(rawSubtitleFinnishText) {
     return rawSubtitleFinnishText.replace(/\n/g, ' ').replace(/\s+/g, ' ').trim().toLowerCase();
 }
-// Moved: settings + state management to content/settings.ts
 // ==================================
 // UNIFIED CONTROL PANEL
 // ==================================
@@ -130,7 +127,6 @@ const subtitleTimestamps = [];
  * Used for repeat subtitle feature - accumulates like subtitleTimestamps
  */
 const fullSubtitles = [];
-// Moved: word translation + tooltip logic to content/word-translation.ts
 /**
  * @type {string | null}
  * Memory cached current movie name
@@ -147,8 +143,7 @@ openDatabase().then(db => {
     cleanupOldMovieData(db).then((cleanCount) => {
         console.info(`YleDualSubExtension: Clean ${cleanCount} movies data`);
     }).catch(error => { console.error("YleDualSubExtension: Error when cleaning old movie data: ", error); });
-}).
-    catch((error) => {
+}).catch((error) => {
     console.error("YleDualSubExtension: Failed to established connection to indexDB: ", error);
 });
 // ==================================
@@ -157,8 +152,6 @@ openDatabase().then(db => {
 // ==================================
 // SECTION 2: TRANSLATION QUEUE
 // ==================================
-// Moved: TranslationQueue + handleBatchTranslation to content/translation-queue.ts
-// Moved: fetchBatchTranslation to content/translation-api.ts
 /**
  * Show batch translation loading indicator
  */
@@ -217,38 +210,21 @@ function hideBatchTranslationIndicator() {
         indicator.style.display = 'none';
     }
 }
-// Moved: fetchTranslation to content/translation-api.ts
 // ==================================
 // END SECTION
 // ==================================
 // ==================================
 // SECTION 3: UI MANIPULATION UTILS
 // ==================================
-// Moved: subtitle DOM helpers to content/subtitle-dom.ts
 // ==================================
 // SECTION 3.5: POPUP DICTIONARY
 // ==================================
-// Moved: word translation + tooltip logic to content/word-translation.ts
 // ==================================
 // SECTION 3.55: MOUSE ACTIVITY TRACKING
 // ==================================
-// Moved: mouse activity + focus handling to content/ui-events.ts
-// ==================================
-// SECTION 3.6: AUTO-PAUSE FEATURE
-// ==================================
-/**
- * Check if subtitle text has changed and trigger auto-pause if enabled
- * @param {string} newSubtitleText - The new subtitle text
- */
-// Moved: auto-pause logic to content/settings.ts
-// ==================================
-// END AUTO-PAUSE SECTION
-// ==================================
-// Moved: subtitle DOM + mutation observers to content/subtitle-dom.ts
 async function sleep(ms) {
     return new Promise(resolve => setTimeout(resolve, ms));
 }
-// Moved: provider validation + dual-sub warning logic to content/settings.ts
 /**
  * Add Dual Sub extension section to the video player's bottom control bar
  * next to the volume control.
@@ -269,7 +245,6 @@ async function getVideoTitle() {
         if (titleElement) {
             break;
         }
-        ;
         await sleep(150);
     }
     if (!titleElement) {
@@ -309,9 +284,7 @@ async function loadMovieCacheAndUpdateMetadata(movieName) {
         return;
     }
     const subtitleRecords = await loadSubtitlesByMovieName(db, currentMovieName, targetLanguage);
-    if (Array.isArray(subtitleRecords) && subtitleRecords.length >= 0) {
-        console.info(`YleDualSubExtension: Loaded ${subtitleRecords.length} cached subtitles for movie: ${currentMovieName}`);
-    }
+    console.info(`YleDualSubExtension: Loaded ${subtitleRecords.length} cached subtitles for movie: ${currentMovieName}`);
     for (const subtitleRecord of subtitleRecords) {
         // Use toTranslationKey to normalize the key, matching how lookups are done
         sharedTranslationMap.set(toTranslationKey(subtitleRecord.originalText), subtitleRecord.translatedText);
@@ -319,7 +292,6 @@ async function loadMovieCacheAndUpdateMetadata(movieName) {
     const lastAccessedDays = Math.floor(Date.now() / (1000 * 60 * 60 * 24));
     await upsertMovieMetadata(db, currentMovieName, lastAccessedDays);
 }
-// Moved: subtitle DOM + mutation observers to content/subtitle-dom.ts
 document.addEventListener("sendTranslationTextEvent", (e) => {
     /**
      * Listening for incoming subtitle texts loaded into video player from injected.js
@@ -342,8 +314,7 @@ document.addEventListener("sendTranslationTextEvent", (e) => {
         return;
     }
     translationQueue.addToQueue(rawSubtitleFinnishText);
-    translationQueue.processQueue().then(() => {
-    }).catch((error) => {
+    translationQueue.processQueue().catch((error) => {
         console.error("YleDualSubExtension: Error processing translation queue:", error);
     });
 });
@@ -363,9 +334,6 @@ document.addEventListener("sendBatchTranslationEvent", (e) => {
         console.error("DualSubExtension: Error in batch translation:", error);
     });
 });
-// Moved: UI event listeners to content/ui-events.ts
-// Moved: runtime message handlers to content/runtime-messages.ts
-// Moved: settings change listeners to content/settings.ts
 // ==================================
 // END UNIFIED CONTROL PANEL SECTION
 // ==================================

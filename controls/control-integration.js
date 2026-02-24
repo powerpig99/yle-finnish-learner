@@ -400,7 +400,7 @@ const ControlIntegration = {
    * Simplified: just stores the value, no auto-enable/disable logic
    * @param {string} langCode - Detected language code
    */
-  setSourceLanguage(langCode, options = {}) {
+  setSourceLanguage(langCode) {
     // Handle null explicitly - it means "no subtitles available"
     let normalized = null;
     if (langCode !== null && langCode !== undefined) {

@@ -461,23 +461,20 @@ function waitForSettingsBootstrap() {
 }
 // Load core settings on startup
 startSettingsBootstrap();
-// Listen for user setting changes for provider/key selection in Options page
 chrome.storage.onChanged.addListener(async (changes, namespace) => {
-    // Handle provider or API key changes
-    if (namespace === 'sync' && (changes.translationProvider ||
+    if (namespace !== 'sync') {
+        return;
+    }
+    if (changes.translationProvider ||
         changes.deeplApiKey ||
         changes.claudeApiKey ||
         changes.geminiApiKey ||
         changes.grokApiKey ||
-        changes.kimiApiKey)) {
+        changes.kimiApiKey) {
         const hasValidProvider = await checkHasValidProvider();
         _handleDualSubBehaviourBasedOnSelectedToken(hasValidProvider);
     }
-    if (namespace === 'sync' && changes.targetLanguage) {
-        // Handled in the cross-tab sync listener below.
-    }
-    // Handle subtitle font size changes
-    if (namespace === 'sync' && changes.subtitleFontSize) {
+    if (changes.subtitleFontSize) {
         const newSize = changes.subtitleFontSize.newValue;
         if (newSize && typeof newSize === 'string') {
             subtitleFontSize = newSize;
@@ -485,17 +482,11 @@ chrome.storage.onChanged.addListener(async (changes, namespace) => {
             console.info(`YleDualSubExtension: Subtitle font size updated to ${newSize}`);
         }
     }
-});
-// Listen for storage changes (cross-tab sync)
-chrome.storage.onChanged.addListener((changes, areaName) => {
-    if (areaName !== 'sync')
-        return;
     if (changes.extensionEnabled) {
         const newEnabled = changes.extensionEnabled.newValue !== false;
         if (newEnabled !== extensionEnabled) {
             extensionEnabled = newEnabled;
             console.info('DualSubExtension: Extension enabled changed via storage:', newEnabled);
-            // Update control integration state
             ControlIntegration.updateState({ extensionEnabled: newEnabled });
         }
     }
@@ -504,9 +495,7 @@ chrome.storage.onChanged.addListener((changes, areaName) => {
         const previousTargetLanguage = targetLanguage;
         targetLanguage = newTargetLanguage;
         console.info('DualSubExtension: Target language changed via storage:', newTargetLanguage);
-        // Update control integration and recalculate activation
         ControlIntegration.setTargetLanguage(newTargetLanguage);
-        // Refresh translation state in-page without forcing a YLE player reload.
         if (previousTargetLanguage !== newTargetLanguage) {
             document.dispatchEvent(new CustomEvent('dscTargetLanguageChanged', {
                 detail: { targetLanguage: newTargetLanguage }

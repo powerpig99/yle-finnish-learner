@@ -68,7 +68,6 @@ class TranslationQueue {
                     }
                     if (globalDatabaseInstance) {
                         saveSubtitlesBatch(globalDatabaseInstance, toCacheSubtitleRecords)
-                            .then(() => { })
                             .catch((error) => {
                             console.error("YleDualSubExtension: Error saving subtitles batch to cache:", error);
                         });
