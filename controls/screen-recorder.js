@@ -356,7 +356,4 @@ const ScreenRecorder = {
   }
 };
 
-// Export for use in other modules
-if (typeof window !== 'undefined') {
-  window.ScreenRecorder = ScreenRecorder;
-}
+window.ScreenRecorder = ScreenRecorder;

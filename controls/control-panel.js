@@ -563,7 +563,4 @@ class ControlPanel {
   }
 }
 
-// Export for use in other modules
-if (typeof window !== 'undefined') {
-  window.ControlPanel = ControlPanel;
-}
+window.ControlPanel = ControlPanel;

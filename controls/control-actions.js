@@ -23,7 +23,6 @@ const ControlActions = {
    */
   isSkipDebugEnabled() {
     try {
-      if (typeof window === 'undefined') return false;
       return window.__DSC_DEBUG_SKIP === true || window.localStorage?.getItem('dsc.debug.skip') === '1';
     } catch (_error) {
       return false;
@@ -318,28 +317,20 @@ const ControlActions = {
    * Open extension settings page
    */
   openSettings() {
-    if (typeof chrome !== 'undefined' && chrome.runtime) {
-      if (typeof safeSendMessage === 'function') {
-        safeSendMessage({ action: 'openOptionsPage' })
-          .then((response) => {
-            if (response === null && typeof showExtensionInvalidatedToast === 'function') {
-              const shouldRefresh = typeof confirm === 'function'
-                ? confirm('Extension updated. Refresh this page now to open settings?')
-                : false;
-              if (shouldRefresh) {
-                location.reload();
-                return;
-              }
-              showExtensionInvalidatedToast();
-            }
-          })
-          .catch(err => {
-            console.warn('DualSubExtension: Failed to open options page:', err);
-          });
-      } else {
-        chrome.runtime.sendMessage({ action: 'openOptionsPage' });
-      }
-    }
+    safeSendMessage({ action: 'openOptionsPage' })
+      .then((response) => {
+        if (response === null) {
+          const shouldRefresh = confirm('Extension updated. Refresh this page now to open settings?');
+          if (shouldRefresh) {
+            location.reload();
+            return;
+          }
+          showExtensionInvalidatedToast();
+        }
+      })
+      .catch(err => {
+        console.warn('DualSubExtension: Failed to open options page:', err);
+      });
   },
 
   /**
@@ -348,11 +339,9 @@ const ControlActions = {
    * @param {*} value - Value to save
    */
   savePreference(key, value) {
-    if (typeof chrome !== 'undefined' && chrome.storage) {
-      chrome.storage.sync.set({ [key]: value }).catch(err => {
-        console.warn('DualSubExtension: Error saving preference:', err);
-      });
-    }
+    chrome.storage.sync.set({ [key]: value }).catch(err => {
+      console.warn('DualSubExtension: Error saving preference:', err);
+    });
   },
 
   /**
@@ -362,20 +351,14 @@ const ControlActions = {
    * @returns {Promise<*>}
    */
   async loadPreference(key, defaultValue) {
-    if (typeof chrome !== 'undefined' && chrome.storage) {
-      try {
-        const result = await chrome.storage.sync.get(key);
-        return result[key] !== undefined ? result[key] : defaultValue;
-      } catch (err) {
-        console.warn('DualSubExtension: Error loading preference:', err);
-        return defaultValue;
-      }
+    try {
+      const result = await chrome.storage.sync.get(key);
+      return result[key] !== undefined ? result[key] : defaultValue;
+    } catch (err) {
+      console.warn('DualSubExtension: Error loading preference:', err);
+      return defaultValue;
     }
-    return defaultValue;
   }
 };
 
-// Export for use in other modules
-if (typeof window !== 'undefined') {
-  window.ControlActions = ControlActions;
-}
+window.ControlActions = ControlActions;

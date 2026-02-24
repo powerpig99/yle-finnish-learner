@@ -209,7 +209,4 @@ const AudioFilters = {
   }
 };
 
-// Export for use in other modules
-if (typeof window !== 'undefined') {
-  window.AudioFilters = AudioFilters;
-}
+window.AudioFilters = AudioFilters;

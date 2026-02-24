@@ -185,6 +185,17 @@ function getOriginalSubtitlesWrapper() {
     }
     return document.querySelector('[data-testid="subtitles-wrapper"]');
 }
+
+function renderCurrentSubtitleImmediately(originalSubtitlesWrapper) {
+    const displayedSubtitlesWrapper = createAndPositionDisplayedSubtitlesWrapper(originalSubtitlesWrapper);
+    displayedSubtitlesWrapper.innerHTML = '';
+    displayedSubtitlesWrapper.style.display = 'flex';
+    const originalSubtitleElements = getSubtitleTextElements(originalSubtitlesWrapper);
+    if (originalSubtitleElements.length > 0) {
+        addContentToDisplayedSubtitlesWrapper(displayedSubtitlesWrapper, originalSubtitleElements);
+    }
+    translationQueue.processQueue().catch(console.error);
+}
 // SECTION: UNIFIED CONTROL PANEL EVENT LISTENERS
 // ==================================
 /* global ControlIntegration, ControlPanel, ControlActions, ControlKeyboard */
@@ -197,14 +208,7 @@ document.addEventListener('dscDualSubToggle', (e) => {
         const originalSubtitlesWrapper = getOriginalSubtitlesWrapper();
         if (originalSubtitlesWrapper) {
             originalSubtitlesWrapper.classList.add('dsc-original-hidden');
-            const displayedSubtitlesWrapper = createAndPositionDisplayedSubtitlesWrapper(originalSubtitlesWrapper);
-            displayedSubtitlesWrapper.innerHTML = '';
-            displayedSubtitlesWrapper.style.display = 'flex';
-            const originalSubtitleElements = getSubtitleTextElements(originalSubtitlesWrapper);
-            if (originalSubtitleElements.length > 0) {
-                addContentToDisplayedSubtitlesWrapper(displayedSubtitlesWrapper, originalSubtitleElements);
-            }
-            translationQueue.processQueue().catch(console.error);
+            renderCurrentSubtitleImmediately(originalSubtitlesWrapper);
         }
     }
     else {
@@ -303,6 +307,7 @@ document.addEventListener('dscExtensionToggle', (e) => {
         const originalWrapper = getOriginalSubtitlesWrapper();
         if (originalWrapper) {
             originalWrapper.classList.add('dsc-original-hidden');
+            renderCurrentSubtitleImmediately(originalWrapper);
         }
         // Re-schedule auto-pause if it's enabled
         if (autoPauseEnabled) {

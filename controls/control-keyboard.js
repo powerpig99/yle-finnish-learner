@@ -267,7 +267,4 @@ class ControlKeyboard {
   }
 }
 
-// Export for use in other modules
-if (typeof window !== 'undefined') {
-  window.ControlKeyboard = ControlKeyboard;
-}
+window.ControlKeyboard = ControlKeyboard;

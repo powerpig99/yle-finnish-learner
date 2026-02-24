@@ -328,7 +328,4 @@ const AudioDownloadUI = {
   }
 };
 
-// Export for use in other modules
-if (typeof window !== 'undefined') {
-  window.AudioDownloadUI = AudioDownloadUI;
-}
+window.AudioDownloadUI = AudioDownloadUI;

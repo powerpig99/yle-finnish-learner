@@ -259,30 +259,19 @@ const ControlIntegration = {
    */
   async _loadPreferences() {
     try {
-      // Check if extension context is still valid
-      if (typeof isExtensionContextValid === 'function' && !isExtensionContextValid()) {
+      if (!isExtensionContextValid()) {
         console.warn('DualSubExtension: Extension context invalidated, using defaults');
         return;
       }
 
-      // Use safe wrapper for storage access
-      const result = typeof safeStorageGet === 'function'
-        ? await safeStorageGet([
-            'dualSubEnabled',
-            'autoPauseEnabled',
-            'playbackSpeed',
-            'ytSourceLanguage',
-            'extensionEnabled',
-            'targetLanguage'
-          ])
-        : await chrome.storage.sync.get([
-            'dualSubEnabled',
-            'autoPauseEnabled',
-            'playbackSpeed',
-            'ytSourceLanguage',
-            'extensionEnabled',
-            'targetLanguage'
-          ]);
+      const result = await safeStorageGet([
+        'dualSubEnabled',
+        'autoPauseEnabled',
+        'playbackSpeed',
+        'ytSourceLanguage',
+        'extensionEnabled',
+        'targetLanguage'
+      ]);
 
       if (typeof result.dualSubEnabled === 'boolean') {
         this._state.dualSubEnabled = result.dualSubEnabled;
@@ -301,18 +290,12 @@ const ControlIntegration = {
       this._state.extensionEnabled = this._userExtensionEnabled && this._captionsEnabled;
 
       // Load effective target language
-      if (typeof getEffectiveTargetLanguage === 'function') {
-        this._state.targetLanguage = await getEffectiveTargetLanguage();
-      } else if (result.targetLanguage) {
-        this._state.targetLanguage = result.targetLanguage;
-      }
+      this._state.targetLanguage = await getEffectiveTargetLanguage();
     } catch (e) {
       // Check if this is an extension context invalidation error
       if (e.message && e.message.includes('Extension context invalidated')) {
         console.warn('DualSubExtension: Extension context invalidated during preferences load');
-        if (typeof showExtensionInvalidatedToast === 'function') {
-          showExtensionInvalidatedToast();
-        }
+        showExtensionInvalidatedToast();
         return;
       }
       console.warn('DualSubExtension: Error loading preferences:', e);
@@ -1451,7 +1434,4 @@ const ControlIntegration = {
   }
 };
 
-// Export for use in other modules
-if (typeof window !== 'undefined') {
-  window.ControlIntegration = ControlIntegration;
-}
+window.ControlIntegration = ControlIntegration;

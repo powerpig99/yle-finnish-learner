@@ -135,7 +135,4 @@ const ControlIcons = {
   }
 };
 
-// Export for use in other modules
-if (typeof window !== 'undefined') {
-  window.ControlIcons = ControlIcons;
-}
+window.ControlIcons = ControlIcons;

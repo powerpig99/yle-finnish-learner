@@ -38,13 +38,6 @@ let playbackSpeed = 1.0;
 // State of Extension Enabled (global on/off toggle)
 let extensionEnabled = true;
 let detectedSourceLanguage = null;
-// Target language for translation (loaded from storage)
-window._targetLanguage = 'en'; // Default to English
-chrome.storage.sync.get(['targetLanguage'], (result) => {
-    if (result.targetLanguage) {
-        window._targetLanguage = result.targetLanguage;
-    }
-});
 /**
  * Load extension enabled state from Chrome storage
  */
@@ -79,13 +72,8 @@ function shouldTranslate() {
     if (!detectedSourceLanguage) {
         return true;
     }
-    // Check if same language using the utility function
-    if (typeof isSameLanguage === 'function') {
-        // Get target language from storage or use default
-        const targetLang = window._targetLanguage || 'en';
-        if (isSameLanguage(detectedSourceLanguage, targetLang)) {
-            return false;
-        }
+    if (isSameLanguage(detectedSourceLanguage, targetLanguage)) {
+        return false;
     }
     return true;
 }
@@ -515,7 +503,6 @@ chrome.storage.onChanged.addListener((changes, areaName) => {
         const newTargetLanguage = changes.targetLanguage.newValue || 'EN-US';
         const previousTargetLanguage = targetLanguage;
         targetLanguage = newTargetLanguage;
-        window._targetLanguage = newTargetLanguage;
         console.info('DualSubExtension: Target language changed via storage:', newTargetLanguage);
         // Update control integration and recalculate activation
         ControlIntegration.setTargetLanguage(newTargetLanguage);

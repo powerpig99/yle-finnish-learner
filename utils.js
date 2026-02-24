@@ -19,11 +19,7 @@ function isExtensionContextValid() {
     return false;
   }
   try {
-    // Try to access chrome.runtime.id - this throws if context is invalidated
-    if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.id) {
-      return true;
-    }
-    return false;
+    return !!chrome.runtime.id;
   } catch (e) {
     extensionContextInvalidated = true;
     return false;
@@ -47,27 +43,6 @@ async function safeStorageGet(keys) {
       showExtensionInvalidatedToast();
     }
     return {};
-  }
-}
-
-/**
- * Wrapper for chrome.storage.sync.set that handles context invalidation
- * @param {Object} items - Items to store
- * @returns {Promise<boolean>} - True if successful, false if failed
- */
-async function safeStorageSet(items) {
-  if (!isExtensionContextValid()) {
-    return false;
-  }
-  try {
-    await chrome.storage.sync.set(items);
-    return true;
-  } catch (e) {
-    if (e.message && e.message.includes('Extension context invalidated')) {
-      extensionContextInvalidated = true;
-      showExtensionInvalidatedToast();
-    }
-    return false;
   }
 }
 
@@ -262,8 +237,7 @@ function isSameLanguage(lang1, lang2) {
  * Get the effective target language using cascade:
  * 1. User-configured target language (from storage)
  * 2. Browser/interface language (navigator.language)
- * 3. Chrome UI language (chrome.i18n.getUILanguage())
- * 4. Fallback to 'en'
+ * 3. Fallback to 'en'
  *
  * @returns {Promise<string>} - Normalized target language code
  */
@@ -284,31 +258,11 @@ async function getEffectiveTargetLanguage() {
       return normalizeLanguageCode(navigator.language);
     }
 
-    // 3. Try Chrome's UI language
-    if (typeof chrome !== 'undefined' && chrome.i18n && chrome.i18n.getUILanguage) {
-      return normalizeLanguageCode(chrome.i18n.getUILanguage());
-    }
-
-    // 4. Default fallback
+    // 3. Default fallback
     return 'en';
   } catch (error) {
     console.warn('DualSubExtension: Error getting effective target language:', error);
     return 'en';
-  }
-}
-
-/**
- * Load extension enabled state from storage
- * @returns {Promise<boolean>} - Whether the extension is enabled
- */
-async function loadExtensionEnabledFromStorage() {
-  try {
-    const result = await chrome.storage.sync.get('extensionEnabled');
-    // Default to true if not set
-    return result.extensionEnabled !== false;
-  } catch (error) {
-    console.warn('DualSubExtension: Error loading extension enabled state:', error);
-    return true;
   }
 }
 

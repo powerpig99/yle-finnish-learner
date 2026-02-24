@@ -533,7 +533,4 @@ const AudioRecorder = {
   }
 };
 
-// Export for use in other modules
-if (typeof window !== 'undefined') {
-  window.AudioRecorder = AudioRecorder;
-}
+window.AudioRecorder = AudioRecorder;

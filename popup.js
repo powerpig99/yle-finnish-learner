@@ -10,6 +10,7 @@ document.getElementById("setupLink").addEventListener("click", (e) => {
 // Extension toggle functionality
 const extensionToggle = document.getElementById("extension-enabled-toggle");
 const extensionStatus = document.getElementById("extension-status");
+const YLE_TAB_URL_PATTERN = 'https://areena.yle.fi/*';
 
 /**
  * Update the status display based on current state
@@ -17,7 +18,7 @@ const extensionStatus = document.getElementById("extension-status");
  * @param {boolean} enabled - Whether extension is enabled
  */
 function updateStatusDisplay(enabled) {
-  extensionStatus.classList.remove('status-disabled', 'status-same-lang', 'status-waiting');
+  extensionStatus.classList.remove('status-disabled');
 
   if (enabled) {
     extensionStatus.textContent = "Extension enabled";
@@ -53,9 +54,12 @@ extensionToggle.addEventListener("change", async (e) => {
     // Update UI immediately
     updateStatusDisplay(enabled);
 
-    // Send message to all tabs with content script
-    const tabs = await chrome.tabs.query({});
+    // Send message to YLE tabs with content script
+    const tabs = await chrome.tabs.query({ url: [YLE_TAB_URL_PATTERN] });
     for (const tab of tabs) {
+      if (typeof tab.id !== 'number') {
+        continue;
+      }
       try {
         await chrome.tabs.sendMessage(tab.id, {
           action: 'extensionToggled',
