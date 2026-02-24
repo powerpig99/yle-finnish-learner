@@ -367,7 +367,6 @@ async function translateWord(word, context) {
         }
         // Invalid cache entry, remove it
         wordTranslationCache.delete(cacheKey);
-        console.info(`YleDualSubExtension: Removed invalid cached translation for "${normalizedWord}"`);
     }
     // Check IndexedDB cache
     if (globalDatabaseInstance) {
@@ -375,9 +374,7 @@ async function translateWord(word, context) {
             const cached = await getWordTranslation(globalDatabaseInstance, normalizedWord, targetLanguage);
             if (cached && !isInvalidCachedTranslation(cached.translation)) {
                 wordTranslationCache.set(cacheKey, cached.translation);
-                // Return the original source (wiktionary or llm) so UI can show correct link
-                // Default to 'wiktionary' for backward compatibility with old cache entries
-                return { translation: cached.translation, wiktionaryUrl, source: cached.source || 'wiktionary' };
+                return { translation: cached.translation, wiktionaryUrl, source: cached.source };
             }
         }
         catch (error) {
@@ -390,9 +387,7 @@ async function translateWord(word, context) {
         // Cache the translation
         wordTranslationCache.set(cacheKey, translation);
         if (globalDatabaseInstance) {
-            console.info('YleDualSubExtension: Saving word to cache:', normalizedWord, targetLanguage);
             saveWordTranslation(globalDatabaseInstance, normalizedWord, targetLanguage, translation, 'wiktionary')
-                .then(() => console.info('YleDualSubExtension: Word saved successfully:', normalizedWord))
                 .catch(err => console.warn("YleDualSubExtension: Error caching word translation:", err));
         }
         else {
@@ -401,7 +396,6 @@ async function translateWord(word, context) {
         return { translation, wiktionaryUrl, source: 'wiktionary' };
     }
     catch (wiktionaryError) {
-        console.info(`YleDualSubExtension: Wiktionary lookup failed for "${word}", falling back to LLM with context`);
         // Fallback to LLM with subtitle context
         try {
             const rawTranslation = await translateWordWithLLM(word, context);
@@ -410,9 +404,7 @@ async function translateWord(word, context) {
             // Cache the translation (LLM translations are generally reliable)
             wordTranslationCache.set(cacheKey, translation);
             if (globalDatabaseInstance) {
-                console.info('YleDualSubExtension: Saving LLM word to cache:', normalizedWord, targetLanguage);
                 saveWordTranslation(globalDatabaseInstance, normalizedWord, targetLanguage, translation, 'llm')
-                    .then(() => console.info('YleDualSubExtension: LLM word saved successfully:', normalizedWord))
                     .catch(err => console.warn("YleDualSubExtension: Error caching word translation:", err));
             }
             else {

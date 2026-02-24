@@ -20,7 +20,6 @@ global.console = {
 // database.js uses conditional exports: CommonJS in Node.js, global functions in browser.
 const {
     openDatabase,
-    saveSubtitle,
     saveSubtitlesBatch,
     loadSubtitlesByMovieName,
     clearSubtitlesByMovieName,
@@ -30,6 +29,16 @@ const {
     deleteMovieMetadata,
     cleanupOldMovieData
 } = require('../../database.js');
+
+async function saveSubtitleRecord(db, movieName, targetLanguage, originalText, translatedText) {
+    await saveSubtitlesBatch(db, [{
+        movieName,
+        originalLanguage: 'FI',
+        targetLanguage,
+        originalText,
+        translatedText
+    }]);
+}
 
 function deleteDB(name) {
     return new Promise((resolve, reject) => {
@@ -70,14 +79,14 @@ describe('Database Functions', () => {
         });
     });
 
-    describe('saveSubtitle and loadSubtitlesByMovieName', () => {
+    describe('save subtitle records and loadSubtitlesByMovieName', () => {
         test('should save and load a single subtitle', async () => {
             const movieName = 'Test Movie';
             const targetLanguage = 'EN-US';
             const originalText = 'hei maailma';
             const translatedText = 'hello world';
 
-            await saveSubtitle(db, movieName, targetLanguage, originalText, translatedText);
+            await saveSubtitleRecord(db, movieName, targetLanguage, originalText, translatedText);
             const results = await loadSubtitlesByMovieName(db, movieName, targetLanguage);
 
             assert.equal(results.length, 1);
@@ -92,9 +101,9 @@ describe('Database Functions', () => {
             const movieName = 'Test Movie';
             const targetLanguage = 'EN-US';
 
-            await saveSubtitle(db, movieName, targetLanguage, 'hei', 'hello');
-            await saveSubtitle(db, movieName, targetLanguage, 'kiitos', 'thanks');
-            await saveSubtitle(db, movieName, targetLanguage, 'näkemiin', 'goodbye');
+            await saveSubtitleRecord(db, movieName, targetLanguage, 'hei', 'hello');
+            await saveSubtitleRecord(db, movieName, targetLanguage, 'kiitos', 'thanks');
+            await saveSubtitleRecord(db, movieName, targetLanguage, 'näkemiin', 'goodbye');
 
             const results = await loadSubtitlesByMovieName(db, movieName, targetLanguage);
             assert.equal(results.length, 3);
@@ -107,8 +116,8 @@ describe('Database Functions', () => {
 
         test('should handle different target languages separately', async () => {
             const movieName = 'Test Movie';
-            await saveSubtitle(db, movieName, 'EN-US', 'hei', 'hello');
-            await saveSubtitle(db, movieName, 'VI', 'hei', 'xin chào');
+            await saveSubtitleRecord(db, movieName, 'EN-US', 'hei', 'hello');
+            await saveSubtitleRecord(db, movieName, 'VI', 'hei', 'xin chào');
 
             const englishResults = await loadSubtitlesByMovieName(db, movieName, 'EN-US');
             const vietnameseResults = await loadSubtitlesByMovieName(db, movieName, 'VI');
@@ -124,8 +133,8 @@ describe('Database Functions', () => {
             const targetLanguage = 'EN-US';
             const originalText = 'hei';
 
-            await saveSubtitle(db, movieName, targetLanguage, originalText, 'hello');
-            await saveSubtitle(db, movieName, targetLanguage, originalText, 'hi');
+            await saveSubtitleRecord(db, movieName, targetLanguage, originalText, 'hello');
+            await saveSubtitleRecord(db, movieName, targetLanguage, originalText, 'hi');
 
             const results = await loadSubtitlesByMovieName(db, movieName, targetLanguage);
             assert.equal(results.length, 1);
@@ -202,9 +211,9 @@ describe('Database Functions', () => {
     describe('clearSubtitlesByMovieName', () => {
         test('should delete all subtitles for a movie across all languages', async () => {
             const movieName = 'Test Movie';
-            await saveSubtitle(db, movieName, 'EN-US', 'hei', 'hello');
-            await saveSubtitle(db, movieName, 'VI', 'hei', 'xin chào');
-            await saveSubtitle(db, movieName, 'EN-US', 'kiitos', 'thanks');
+            await saveSubtitleRecord(db, movieName, 'EN-US', 'hei', 'hello');
+            await saveSubtitleRecord(db, movieName, 'VI', 'hei', 'xin chào');
+            await saveSubtitleRecord(db, movieName, 'EN-US', 'kiitos', 'thanks');
 
             const deletedCount = await clearSubtitlesByMovieName(db, movieName);
             const englishResults = await loadSubtitlesByMovieName(db, movieName, 'EN-US');
@@ -216,8 +225,8 @@ describe('Database Functions', () => {
         });
 
         test('should not affect other movies', async () => {
-            await saveSubtitle(db, 'Movie 1', 'EN-US', 'hei', 'hello');
-            await saveSubtitle(db, 'Movie 2', 'EN-US', 'hei', 'hello');
+            await saveSubtitleRecord(db, 'Movie 1', 'EN-US', 'hei', 'hello');
+            await saveSubtitleRecord(db, 'Movie 2', 'EN-US', 'hei', 'hello');
 
             await clearSubtitlesByMovieName(db, 'Movie 1');
             const movie1Results = await loadSubtitlesByMovieName(db, 'Movie 1', 'EN-US');
@@ -302,10 +311,10 @@ describe('Database Functions', () => {
             const recentMovieName = 'Recent Movie';
 
             await upsertMovieMetadata(db, oldMovieName, nowDays - 40);
-            await saveSubtitle(db, oldMovieName, 'EN-US', 'hei', 'hello');
+            await saveSubtitleRecord(db, oldMovieName, 'EN-US', 'hei', 'hello');
 
             await upsertMovieMetadata(db, recentMovieName, nowDays - 10);
-            await saveSubtitle(db, recentMovieName, 'EN-US', 'hei', 'hello');
+            await saveSubtitleRecord(db, recentMovieName, 'EN-US', 'hei', 'hello');
 
             const cleanedCount = await cleanupOldMovieData(db, 30);
 

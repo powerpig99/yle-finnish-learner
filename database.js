@@ -53,11 +53,8 @@ async function openDatabase() {
         // Handle database upgrade (first time or version change)
         DBOpenRequest.onupgradeneeded = (event) => {
             const db = event.target.result;
-            console.info(`YleDualSubExtension: Database upgrade triggered, ensuring all object stores exist...`);
-
             // Create movie metadata store if it doesn't exist
             if (!db.objectStoreNames.contains(MOVIE_METADATA_OBJECT_STORE)) {
-                console.info(`YleDualSubExtension: Creating ${MOVIE_METADATA_OBJECT_STORE} object store...`);
                 db.createObjectStore(MOVIE_METADATA_OBJECT_STORE, {
                     keyPath: 'movieName',
                 });
@@ -65,7 +62,6 @@ async function openDatabase() {
 
             // Create subtitle cache store if it doesn't exist
             if (!db.objectStoreNames.contains(SUBTITLE_CACHE_OBJECT_STORE)) {
-                console.info(`YleDualSubExtension: Creating ${SUBTITLE_CACHE_OBJECT_STORE} object store...`);
                 const subtitlesObjectStore = db.createObjectStore(SUBTITLE_CACHE_OBJECT_STORE, {
                     keyPath: ['movieName', 'originalLanguage', 'targetLanguage', 'originalText'],
                 });
@@ -74,13 +70,11 @@ async function openDatabase() {
 
             // Delete deprecated old subtitle cache if it exists
             if (db.objectStoreNames.contains(DEPRECATED_ENGLISH_SUBTITLE_CACHE_OBJECT_STORE)) {
-                console.info(`YleDualSubExtension: Deleting deprecated ${DEPRECATED_ENGLISH_SUBTITLE_CACHE_OBJECT_STORE} object store...`);
                 db.deleteObjectStore(DEPRECATED_ENGLISH_SUBTITLE_CACHE_OBJECT_STORE);
             }
 
             // Create word translations store if it doesn't exist (version 3)
             if (!db.objectStoreNames.contains(WORD_TRANSLATION_OBJECT_STORE)) {
-                console.info(`YleDualSubExtension: Creating ${WORD_TRANSLATION_OBJECT_STORE} object store...`);
                 const wordTranslationsStore = db.createObjectStore(WORD_TRANSLATION_OBJECT_STORE, {
                     keyPath: ['word', 'originalLanguage', 'targetLanguage'],
                 });
@@ -121,50 +115,6 @@ async function loadSubtitlesByMovieName(db, movieName, targetLanguage) {
 
         } catch (error) {
             console.error("YleDualSubExtension: loadSubtitlesByMovieName: Error in transaction:", error);
-            reject(error);
-        }
-    });
-}
-
-/**
- * Save a subtitle translation to IndexedDB
- * @param {IDBDatabase} db - Opening database instance
- * @param {string} movieName - The movie name
- * @param {string} targetLanguage - Target language (e.g., "EN-US", "VI")
- * @param {string} originalText - The Finnish subtitle text (normalized)
- * @param {string} translatedText - The translated text in target language
- * @returns {Promise<void>}
- */
-async function saveSubtitle(db, movieName, targetLanguage, originalText, translatedText) {
-    return new Promise((resolve, reject) => {
-        try {
-            const transaction = db.transaction([SUBTITLE_CACHE_OBJECT_STORE], 'readwrite');
-            const objectStore = transaction.objectStore(SUBTITLE_CACHE_OBJECT_STORE);
-
-            /**
-             * @type {SubtitleRecord}
-             */
-            const subtitle = {
-                movieName,
-                originalLanguage: "FI",
-                targetLanguage,
-                originalText,
-                translatedText
-            };
-
-            const DBSaveSubtitlesRequest = objectStore.put(subtitle);
-
-            DBSaveSubtitlesRequest.onsuccess = (_event) => {
-                resolve();
-            };
-
-            DBSaveSubtitlesRequest.onerror = (_event) => {
-                console.error("YleDualSubExtension: saveSubtitle: Error saving subtitle:", DBSaveSubtitlesRequest.error);
-                reject(DBSaveSubtitlesRequest.error);
-            };
-
-        } catch (error) {
-            console.error("YleDualSubExtension: saveSubtitle: Error in transaction:", error);
             reject(error);
         }
     });
@@ -424,8 +374,6 @@ async function cleanupOldMovieData(db, maxAgeDays = 30) {
     const nowDays = Math.floor(Date.now() / (1000 * 60 * 60 * 24));
     const cutoffDays = nowDays - maxAgeDays;
 
-    console.info(`YleDualSubExtension: cleanupOldMovieData: Starting cleanup of movies not accessed since day ${cutoffDays} (${maxAgeDays} days ago)`);
-
     // Get all movie metadata
     const allMetadata = await getAllMovieMetadata(db);
 
@@ -433,8 +381,6 @@ async function cleanupOldMovieData(db, maxAgeDays = 30) {
     const oldMovieMetadatas = allMetadata.filter(metadata =>
         metadata.lastAccessedDays < cutoffDays
     );
-
-    console.info(`YleDualSubExtension: cleanupOldMovieData: Found ${oldMovieMetadatas.length} movies to clean up`);
 
     // Delete each old movie's data
     let cleanedCount = 0;
@@ -447,7 +393,6 @@ async function cleanupOldMovieData(db, maxAgeDays = 30) {
             await deleteMovieMetadata(db, metadata.movieName);
 
             cleanedCount++;
-            console.info(`YleDualSubExtension: cleanupOldMovieData: Cleaned up movie: ${metadata.movieName}`);
         } catch (error) {
             console.warn(`YleDualSubExtension: cleanupOldMovieData: Failed to clean up movie ${metadata.movieName}:`, error);
         }
@@ -540,57 +485,6 @@ async function saveWordTranslation(db, word, targetLanguage, translation, source
 }
 
 /**
- * Clean up old word translations that haven't been accessed recently
- * @param {IDBDatabase} db - Opening database instance
- * @param {number} maxAgeDays - Maximum age in days (default: 60 days)
- * @returns {Promise<number>} Number of word translations cleaned up
- */
-async function cleanupOldWordTranslations(db, maxAgeDays = 60) {
-    const nowDays = Math.floor(Date.now() / (1000 * 60 * 60 * 24));
-    const cutoffDays = nowDays - maxAgeDays;
-
-    return new Promise((resolve, reject) => {
-        try {
-            const transaction = db.transaction([WORD_TRANSLATION_OBJECT_STORE], 'readwrite');
-            const objectStore = transaction.objectStore(WORD_TRANSLATION_OBJECT_STORE);
-            const index = objectStore.index('byLastAccessed');
-
-            const range = IDBKeyRange.upperBound(cutoffDays);
-            const DBDeleteCursorRequest = index.openCursor(range);
-
-            let deletedCount = 0;
-
-            transaction.oncomplete = () => {
-                resolve(deletedCount);
-            };
-
-            transaction.onerror = (_event) => {
-                console.error("YleDualSubExtension: cleanupOldWordTranslations: Transaction error:", transaction.error);
-                reject(transaction.error);
-            };
-
-            DBDeleteCursorRequest.onsuccess = (_event) => {
-                const cursor = DBDeleteCursorRequest.result;
-                if (cursor) {
-                    cursor.delete();
-                    deletedCount++;
-                    cursor.continue();
-                }
-            };
-
-            DBDeleteCursorRequest.onerror = (_event) => {
-                console.error("YleDualSubExtension: cleanupOldWordTranslations: Error:", DBDeleteCursorRequest.error);
-                reject(DBDeleteCursorRequest.error);
-            };
-
-        } catch (error) {
-            console.error("YleDualSubExtension: cleanupOldWordTranslations: Error in transaction:", error);
-            reject(error);
-        }
-    });
-}
-
-/**
  * Clear ALL word translations from the cache
  * Use this to reset bad/outdated cached translations
  * @param {IDBDatabase} db - Opening database instance
@@ -608,7 +502,6 @@ async function clearAllWordTranslations(db) {
                 const clearRequest = objectStore.clear();
 
                 clearRequest.onsuccess = () => {
-                    console.info(`YleDualSubExtension: Cleared ${count} word translations from cache`);
                     resolve(count);
                 };
 
@@ -635,7 +528,6 @@ if (typeof module !== 'undefined' && typeof module.exports !== 'undefined') {
     // Node.js test environment
     module.exports = {
         openDatabase,
-        saveSubtitle,
         saveSubtitlesBatch,
         loadSubtitlesByMovieName,
         clearSubtitlesByMovieName,
@@ -646,7 +538,6 @@ if (typeof module !== 'undefined' && typeof module.exports !== 'undefined') {
         cleanupOldMovieData,
         getWordTranslation,
         saveWordTranslation,
-        cleanupOldWordTranslations,
         clearAllWordTranslations
     };
 }
