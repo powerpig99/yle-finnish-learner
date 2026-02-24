@@ -194,53 +194,41 @@ async function requestCountFromYleTabs(action) {
     return Promise.all(countPromises);
 }
 
+function maxCount(counts) {
+    return Math.max(0, ...counts);
+}
+
+function sumCounts(counts) {
+    return counts.reduce((sum, count) => sum + count, 0);
+}
+
+async function aggregateYleTabCounts(action, aggregate, onError = null) {
+    try {
+        const counts = await requestCountFromYleTabs(action);
+        return aggregate(counts);
+    }
+    catch (error) {
+        if (onError) {
+            onError(error);
+        }
+        return 0;
+    }
+}
+
 /**
  * Clear all word translations from IndexedDB cache via content scripts
  * Note: Word cache is stored in web page origins, so we must ask content scripts to clear it.
  * @returns {Promise<number>} Number of entries cleared
  */
 async function clearWordTranslationCache() {
-    try {
-        const counts = await requestCountFromYleTabs('clearWordCache');
-        // Return the max count cleared (same origin cache is shared across tabs)
-        const maxCleared = Math.max(0, ...counts);
-        console.info(`YleDualSubExtension: Cleared ${maxCleared} word translations from cache`);
-        return maxCleared;
-    }
-    catch (error) {
-        console.error('YleDualSubExtension: Failed to clear word cache:', error);
-        return 0;
-    }
-}
-/**
- * Get word translation cache count from tabs
- * Note: Word cache is stored in web page origins (via content script), not extension origin.
- * So we must ask content scripts for the count.
- * @returns {Promise<number>}
- */
-async function getWordCacheCount() {
-    try {
-        const counts = await requestCountFromYleTabs('getWordCacheCount');
-        // Return the max count from any tab (they all share the same per-origin cache)
-        // Using max because the same origin's cache will be reported by multiple tabs
-        return Math.max(0, ...counts);
-    }
-    catch (error) {
-        return 0;
-    }
-}
-/**
- * Get subtitle cache count from all tabs
- * @returns {Promise<number>}
- */
-async function getSubtitleCacheCount() {
-    try {
-        const counts = await requestCountFromYleTabs('getSubtitleCacheCount');
-        return counts.reduce((sum, c) => sum + c, 0);
-    }
-    catch (error) {
-        return 0;
-    }
+    // Return the max count cleared (same origin cache is shared across tabs)
+    const maxCleared = await aggregateYleTabCounts(
+        'clearWordCache',
+        maxCount,
+        (error) => console.error('YleDualSubExtension: Failed to clear word cache:', error)
+    );
+    console.info(`YleDualSubExtension: Cleared ${maxCleared} word translations from cache`);
+    return maxCleared;
 }
 /**
  * Get all cache counts
@@ -248,8 +236,9 @@ async function getSubtitleCacheCount() {
  */
 async function getCacheCounts() {
     const [wordCount, subtitleCount] = await Promise.all([
-        getWordCacheCount(),
-        getSubtitleCacheCount()
+        // Word cache is shared per origin; use max across YLE tabs.
+        aggregateYleTabCounts('getWordCacheCount', maxCount),
+        aggregateYleTabCounts('getSubtitleCacheCount', sumCounts)
     ]);
     return { wordCount, subtitleCount };
 }
@@ -258,14 +247,11 @@ async function getCacheCounts() {
  * @returns {Promise<number>}
  */
 async function clearSubtitleCachesInTabs() {
-    let subtitleCount = 0;
-    try {
-        const counts = await requestCountFromYleTabs('clearSubtitleCache');
-        subtitleCount = counts.reduce((sum, c) => sum + c, 0);
-    }
-    catch (error) {
-        console.warn('YleDualSubExtension: Error clearing subtitle caches:', error);
-    }
+    const subtitleCount = await aggregateYleTabCounts(
+        'clearSubtitleCache',
+        sumCounts,
+        (error) => console.warn('YleDualSubExtension: Error clearing subtitle caches:', error)
+    );
     console.info(`YleDualSubExtension: Cleared ${subtitleCount} subtitle translations`);
     return subtitleCount;
 }

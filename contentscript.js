@@ -44,7 +44,7 @@ async function initializeUnifiedControlPanel() {
     console.log('DualSubExtension: Waiting 500ms for player UI to settle...');
     await new Promise(resolve => setTimeout(resolve, 500));
     try {
-        await window.waitForSettingsBootstrap();
+        await startSettingsBootstrap();
         // Check initial captions state (YLE requires manual captions enable)
         const video = document.querySelector('video');
         const captionsEnabled = video

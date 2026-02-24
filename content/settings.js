@@ -53,13 +53,6 @@ async function loadExtensionEnabledState() {
     }
 }
 /**
- * Check if subtitles should be processed based on extension state
- * @returns {boolean}
- */
-function shouldProcessSubtitles() {
-    return extensionEnabled;
-}
-/**
  * Check if translation should be performed
  * Returns false if source and target languages are the same
  * @returns {boolean}
@@ -254,18 +247,6 @@ async function checkHasValidProvider() {
         return true;
     }
 }
-/**
- * Handle dual sub behaviour based on whether a provider key is configured.
- * If no key is selected, display warning icon and disable dual sub switch.
- * @param {boolean} hasSelectedToken
- */
-function _handleDualSubBehaviourBasedOnSelectedToken(hasSelectedToken) {
-    // Unified control panel migration: warning state is managed by dsc panel.
-    ControlIntegration.updateState({
-        showWarning: !hasSelectedToken,
-        warningMessage: hasSelectedToken ? '' : 'Translation provider not configured'
-    });
-}
 // Auto-pause timeout ID for the setTimeout-based approach
 let _autoPauseTimeout = null;
 let _autoPauseLookupRetryCount = 0;
@@ -452,13 +433,6 @@ function startSettingsBootstrap() {
     }
     return _settingsBootstrapPromise;
 }
-/**
- * Wait until settings/state bootstrap is complete.
- * Used by contentscript.js to avoid init races with stale defaults.
- */
-function waitForSettingsBootstrap() {
-    return startSettingsBootstrap();
-}
 // Load core settings on startup
 startSettingsBootstrap();
 chrome.storage.onChanged.addListener(async (changes, namespace) => {
@@ -472,7 +446,11 @@ chrome.storage.onChanged.addListener(async (changes, namespace) => {
         changes.grokApiKey ||
         changes.kimiApiKey) {
         const hasValidProvider = await checkHasValidProvider();
-        _handleDualSubBehaviourBasedOnSelectedToken(hasValidProvider);
+        // Unified control panel migration: warning state is managed by dsc panel.
+        ControlIntegration.updateState({
+            showWarning: !hasValidProvider,
+            warningMessage: hasValidProvider ? '' : 'Translation provider not configured'
+        });
     }
     if (changes.subtitleFontSize) {
         const newSize = changes.subtitleFontSize.newValue;

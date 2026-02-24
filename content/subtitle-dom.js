@@ -288,7 +288,7 @@ function addContentToDisplayedSubtitlesWrapper(displayedSubtitlesWrapper, origin
 let lastDisplayedSubtitleText = "";
 function handleSubtitlesWrapperMutation(mutation) {
     // When extension is off, don't touch the original subtitles at all
-    if (!shouldProcessSubtitles()) {
+    if (!extensionEnabled) {
         return;
     }
     // Always use the actual subtitles-wrapper, not mutation.target
