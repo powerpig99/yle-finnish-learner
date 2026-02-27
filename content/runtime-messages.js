@@ -12,7 +12,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         }
         case 'clearSubtitleCache': {
             // Clear in-memory subtitle cache immediately.
-            sharedTranslationMap.clear();
+            clearSubtitleTranslationState();
             // Clear persistent subtitle cache from IndexedDB.
             (async () => {
                 try {

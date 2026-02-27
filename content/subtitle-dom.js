@@ -205,6 +205,64 @@ function createAndPositionDisplayedSubtitlesWrapper(originalSubtitlesWrapper) {
     }
     return displayedSubtitlesWrapper;
 }
+/** @type {Map<string, Set<HTMLElement>>} */
+const activeTranslationSpans = new Map();
+function clearActiveTranslationSpans() {
+    activeTranslationSpans.clear();
+}
+function trackActiveTranslationSpan(key, span) {
+    let spans = activeTranslationSpans.get(key);
+    if (!spans) {
+        spans = new Set();
+        activeTranslationSpans.set(key, spans);
+    }
+    spans.add(span);
+}
+function renderFailedTranslation(span, originalText, entry) {
+    span.textContent = originalText;
+    span.style.opacity = '0.6';
+    const errorHint = entry?.error ? `: ${entry.error}` : '';
+    span.title = `Translation failed - showing original${errorHint}`;
+}
+function updateTrackedTranslationSpans(key) {
+    const spans = activeTranslationSpans.get(key);
+    if (!spans || spans.size === 0) {
+        activeTranslationSpans.delete(key);
+        return;
+    }
+    const entry = subtitleState.get(key);
+    const remaining = new Set();
+    for (const span of spans) {
+        if (!span.isConnected) {
+            continue;
+        }
+        const originalText = span.dataset.originalText || '';
+        if (entry?.status === 'success' && entry.text) {
+            span.textContent = entry.text;
+            span.style.opacity = '';
+            span.removeAttribute('title');
+            continue;
+        }
+        if (entry?.status === 'failed') {
+            renderFailedTranslation(span, originalText, entry);
+            continue;
+        }
+        remaining.add(span);
+    }
+    if (remaining.size > 0) {
+        activeTranslationSpans.set(key, remaining);
+    }
+    else {
+        activeTranslationSpans.delete(key);
+    }
+}
+document.addEventListener('dscTranslationResolved', (event) => {
+    const key = event?.detail?.key;
+    if (!key || typeof key !== 'string') {
+        return;
+    }
+    updateTrackedTranslationSpans(key);
+});
 /**
  * Add both Finnish and target language subtitles to the displayed subtitles wrapper
  *
@@ -234,46 +292,46 @@ function addContentToDisplayedSubtitlesWrapper(displayedSubtitlesWrapper, origin
     // Skip translation if source and target languages are the same
     if (dualSubEnabled && shouldTranslate()) {
         const translationKey = toTranslationKey(finnishText);
-        let targetLanguageText = sharedTranslationMap.get(translationKey);
-        // Generate unique ID for this translation span
-        const spanId = `translation-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-        // If no translation yet, show "Translating..." and set up a retry mechanism
-        if (!targetLanguageText) {
-            targetLanguageText = "Translating...";
-            // Queue this displayed text for translation since it wasn't found in cache
-            // This handles cases where VTT text differs from displayed text (YLE combines cues)
-            translationQueue.addToQueue(finnishText);
-            translationQueue.processQueue();
-            const startTime = Date.now();
-            // Set up a periodic check to update the translation when it arrives
-            const checkTranslation = setInterval(() => {
-                const translation = sharedTranslationMap.get(translationKey);
-                // Find the specific span by ID to avoid updating wrong subtitle
-                const translationSpan = document.getElementById(spanId);
-                if (!translationSpan) {
-                    // Span no longer exists (subtitle changed), stop checking
-                    clearInterval(checkTranslation);
-                    return;
-                }
-                if (translation) {
-                    translationSpan.textContent = translation;
-                    clearInterval(checkTranslation);
-                }
-                else if (Date.now() - startTime > 15000) {
-                    // After 15 seconds, fall back to showing original text
-                    translationSpan.textContent = finnishText;
-                    translationSpan.style.opacity = '0.6';
-                    translationSpan.title = 'Translation timed out - showing original';
-                    clearInterval(checkTranslation);
-                    console.warn("YleDualSubExtension: Translation timed out for:", finnishText.substring(0, 30));
-                }
-            }, 500);
-            // Clear interval after 20 seconds as final safety net
-            setTimeout(() => clearInterval(checkTranslation), 20000);
+        const stateEntry = subtitleState.get(translationKey);
+        let targetLanguageText = "Translating...";
+        let shouldTrackPendingSpan = false;
+        let shouldStartQueueProcessing = false;
+        let failedEntryForFallback = null;
+        if (stateEntry?.status === 'success' && stateEntry.text) {
+            targetLanguageText = stateEntry.text;
+        }
+        else if (stateEntry?.status === 'failed') {
+            const canRetry = typeof stateEntry.nextRetryAt !== 'number' || stateEntry.nextRetryAt <= Date.now();
+            if (canRetry && enqueueTranslation(finnishText)) {
+                shouldTrackPendingSpan = true;
+                shouldStartQueueProcessing = true;
+            }
+            else {
+                targetLanguageText = finnishText;
+                failedEntryForFallback = stateEntry;
+            }
+        }
+        else if (stateEntry?.status === 'pending') {
+            shouldTrackPendingSpan = true;
+            shouldStartQueueProcessing = true;
+        }
+        else if (enqueueTranslation(finnishText)) {
+            shouldTrackPendingSpan = true;
+            shouldStartQueueProcessing = true;
         }
         const targetLanguageSpan = createSubtitleSpan(targetLanguageText, `${spanClassName} translated-text-span`);
-        targetLanguageSpan.id = spanId;
+        targetLanguageSpan.dataset.originalText = finnishText;
+        targetLanguageSpan.dataset.translationKey = translationKey;
+        if (failedEntryForFallback) {
+            renderFailedTranslation(targetLanguageSpan, finnishText, failedEntryForFallback);
+        }
+        if (shouldTrackPendingSpan) {
+            trackActiveTranslationSpan(translationKey, targetLanguageSpan);
+        }
         displayedSubtitlesWrapper.appendChild(targetLanguageSpan);
+        if (shouldStartQueueProcessing) {
+            translationQueue.processQueue().catch(console.error);
+        }
     }
 }
 /**
@@ -315,6 +373,7 @@ function handleSubtitlesWrapperMutation(mutation) {
             return;
         }
         lastDisplayedSubtitleText = currentFinnishText;
+        clearActiveTranslationSpans();
         displayedSubtitlesWrapper.innerHTML = "";
         addContentToDisplayedSubtitlesWrapper(displayedSubtitlesWrapper, finnishTextElements);
     }
@@ -323,6 +382,7 @@ function handleSubtitlesWrapperMutation(mutation) {
         // Check if the original wrapper is now empty
         const finnishTextElements = getSubtitleTextElements(originalSubtitlesWrapper);
         if (finnishTextElements.length === 0) {
+            clearActiveTranslationSpans();
             displayedSubtitlesWrapper.innerHTML = "";
             lastDisplayedSubtitleText = "";
             setCurrentSubtitleEndTime(null);

@@ -201,6 +201,15 @@ function calculateBackoffDelay(attempt) {
     const jitter = Math.random() * 500;
     return exponentialDelay + jitter;
 }
+function isRetryableTranslationError(errorMsg) {
+    if (typeof errorMsg !== 'string') {
+        return false;
+    }
+    const normalizedError = errorMsg.toLowerCase();
+    return normalizedError.includes('rate limit') ||
+        normalizedError.includes('503') ||
+        normalizedError.includes('failed to fetch');
+}
 /**
  * Main translation function with error handling and retries
  * @param {string[]} texts - Texts to translate
@@ -217,7 +226,7 @@ async function translateTextsWithErrorHandling(texts, targetLanguage) {
             }
             // Check if error is retryable
             const errorMsg = result[1];
-            if (typeof errorMsg === 'string' && errorMsg.includes('rate limit')) {
+            if (isRetryableTranslationError(errorMsg)) {
                 if (attempt < MAX_RETRIES - 1) {
                     await sleep(calculateBackoffDelay(attempt));
                     continue;
@@ -409,11 +418,23 @@ RULES:
 - NO numbering, NO commentary, just translations
 
 ${texts.join('\n')}`;
-    const [ok, content] = await requestAiProviderText(provider, contextualPrompt, 4096);
-    if (!ok) {
-        return [false, content];
+    const MAX_RETRIES = 3;
+    let lastError = 'Translation failed after retries';
+    for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+        const [ok, content] = await requestAiProviderText(provider, contextualPrompt, 4096);
+        if (ok) {
+            return [true, normalizeTranslatedLines(content, texts)];
+        }
+        if (typeof content === 'string' && content) {
+            lastError = content;
+        }
+        if (attempt < MAX_RETRIES - 1 && isRetryableTranslationError(content)) {
+            await sleep(calculateBackoffDelay(attempt));
+            continue;
+        }
+        break;
     }
-    return [true, normalizeTranslatedLines(content, texts)];
+    return [false, lastError];
 }
 // ==================================
 // SINGLE WORD TRANSLATION WITH CONTEXT

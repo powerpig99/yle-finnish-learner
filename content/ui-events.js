@@ -208,6 +208,7 @@ document.addEventListener('dscDualSubToggle', (e) => {
             const translationSpans = displayedSubtitlesWrapper.querySelectorAll('.translated-text-span');
             translationSpans.forEach(span => span.remove());
         }
+        clearActiveTranslationSpans();
         // Keep original YLE subtitles hidden - we show our clickable version instead
     }
 });
@@ -227,14 +228,12 @@ document.addEventListener('dscSpeedChange', (e) => {
 });
 document.addEventListener('dscSourceLangChange', () => {
     // Clear translations when language changes
-    sharedTranslationMap.clear();
+    clearSubtitleTranslationState();
 });
 // Handle target language changes without reloading the YLE page.
 document.addEventListener('dscTargetLanguageChanged', () => {
     // Drop in-memory translations from previous target language.
-    sharedTranslationMap.clear();
-    // Drop pending queue items from the previous language context.
-    translationQueue.queue.length = 0;
+    clearSubtitleTranslationState();
     const originalSubtitlesWrapper = getNativeSubtitlesWrapper();
     if (!originalSubtitlesWrapper) {
         return;

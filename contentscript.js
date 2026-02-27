@@ -4,10 +4,11 @@
 // ==================================
 // SECTION 1: STATE & INITIALIZATION
 // ==================================
-/** @type {Map<string, string>}
- * Shared translation map, with key is normalized Finnish text, and value is translated text
+/** @typedef {{status: 'pending'|'success'|'failed', text?: string, error?: string, nextRetryAt?: number, updatedAt: number}} SubtitleStateEntry */
+/** @type {Map<string, SubtitleStateEntry>}
+ * Shared subtitle translation state map keyed by normalized subtitle text.
  */
-const sharedTranslationMap = new Map();
+const subtitleState = new Map();
 /**
  *
  * @param {string} rawSubtitleFinnishText
@@ -250,8 +251,13 @@ async function loadMovieCacheAndUpdateMetadata(movieName) {
     }
     const subtitleRecords = await loadSubtitlesByMovieName(db, currentMovieName, targetLanguage);
     for (const subtitleRecord of subtitleRecords) {
-        // Use toTranslationKey to normalize the key, matching how lookups are done
-        sharedTranslationMap.set(toTranslationKey(subtitleRecord.originalText), subtitleRecord.translatedText);
+        const key = toTranslationKey(subtitleRecord.originalText);
+        const translatedText = String(subtitleRecord.translatedText || '').trim().replace(/\n/g, ' ');
+        subtitleState.set(key, {
+            status: 'success',
+            text: translatedText,
+            updatedAt: Date.now(),
+        });
     }
     const lastAccessedDays = Math.floor(Date.now() / (1000 * 60 * 60 * 24));
     await upsertMovieMetadata(db, currentMovieName, lastAccessedDays);
