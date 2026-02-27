@@ -389,10 +389,18 @@ function handleSubtitlesWrapperMutation(mutation) {
         }
     }
 }
-// Debounce flag to prevent duplicate initialization during rapid DOM mutations.
-// Set to true when video detection starts, prevents re-triggering for 1.5 seconds.
-// This handles the case where video player construction fires multiple sequential mutations.
-let checkVideoAppearMutationDebounceFlag = false;
+/** @type {HTMLVideoElement|null} */
+let _trackedVideoElement = null;
+function triggerVideoLifecycleInitialization() {
+    if (typeof setupVideoSpeedControl === 'function') {
+        setupVideoSpeedControl();
+    }
+    if (typeof loadMovieCacheAndUpdateMetadata === 'function') {
+        loadMovieCacheAndUpdateMetadata().catch((error) => {
+            console.error("YleDualSubExtension: Error populating shared translation map from cache:", error);
+        });
+    }
+}
 /**
  * Generic video element detection - detects when any <video> element appears in the DOM
  * Works for both:
@@ -406,9 +414,6 @@ let checkVideoAppearMutationDebounceFlag = false;
  * @returns {boolean}
  */
 function isVideoElementAppearMutation(mutation) {
-    if (checkVideoAppearMutationDebounceFlag) {
-        return false;
-    }
     try {
         // Must be a childList mutation with added nodes
         if (mutation.type !== "childList" || mutation.addedNodes.length === 0) {
@@ -424,8 +429,13 @@ function isVideoElementAppearMutation(mutation) {
             // Case 1: The added node IS a video element
             // Case 2: The added node CONTAINS a video element (initial load scenario)
             if (element.tagName === "VIDEO" || element.querySelector?.('video')) {
-                checkVideoAppearMutationDebounceFlag = true;
-                setTimeout(() => { checkVideoAppearMutationDebounceFlag = false; }, 1500);
+                const video = element.tagName === "VIDEO"
+                    ? element
+                    : element.querySelector('video');
+                if (!video || video === _trackedVideoElement) {
+                    continue;
+                }
+                _trackedVideoElement = video;
                 return true;
             }
         }
@@ -435,6 +445,28 @@ function isVideoElementAppearMutation(mutation) {
         console.warn("YleDualSubExtension: Error checking video element mutation:", error);
         return false;
     }
+}
+/**
+ * Detect when BottomControlBar__LeftControls is added to the DOM.
+ * This is the authoritative "player ready" signal for panel mounting.
+ * @param {MutationRecord} mutation
+ * @returns {boolean}
+ */
+function isControlBarMutation(mutation) {
+    if (mutation.type !== 'childList' || mutation.addedNodes.length === 0) {
+        return false;
+    }
+    for (const node of mutation.addedNodes) {
+        if (node.nodeType !== Node.ELEMENT_NODE) {
+            continue;
+        }
+        const element = node;
+        if (element.matches?.('[class^="BottomControlBar__LeftControls"]') ||
+            element.querySelector?.('[class^="BottomControlBar__LeftControls"]')) {
+            return true;
+        }
+    }
+    return false;
 }
 // CC ON/OFF detection is now handled by TextTrack API in settings.js
 // (setupVideoSpeedControl → video.textTracks 'change' event)
@@ -447,15 +479,15 @@ const observer = new MutationObserver((mutations) => {
                 handleSubtitlesWrapperMutation(mutation);
                 return;
             }
+            if (isControlBarMutation(mutation)) {
+                if (typeof addDualSubExtensionSection === 'function') {
+                    addDualSubExtensionSection().catch((error) => {
+                        console.error("YleDualSubExtension: Error adding dual sub extension section:", error);
+                    });
+                }
+            }
             if (isVideoElementAppearMutation(mutation)) {
-                addDualSubExtensionSection().catch((error) => {
-                    console.error("YleDualSubExtension: Error adding dual sub extension section:", error);
-                });
-                loadMovieCacheAndUpdateMetadata().catch((error) => {
-                    console.error("YleDualSubExtension: Error populating shared translation map from cache:", error);
-                });
-                // Apply saved playback speed
-                setupVideoSpeedControl();
+                triggerVideoLifecycleInitialization();
             }
         }
     });
@@ -466,4 +498,18 @@ if (document.body instanceof Node) {
         childList: true,
         subtree: true,
     });
+}
+// Bootstrap: if player already present when extension is injected (live-page case).
+if (document.querySelector('[class^="BottomControlBar__LeftControls"]')) {
+    if (typeof addDualSubExtensionSection === 'function') {
+        addDualSubExtensionSection().catch((error) => {
+            console.error("YleDualSubExtension: Error adding dual sub extension section:", error);
+        });
+    }
+}
+// Bootstrap: if video already present when extension is injected.
+const existingVideo = document.querySelector('video');
+if (existingVideo && existingVideo !== _trackedVideoElement) {
+    _trackedVideoElement = existingVideo;
+    triggerVideoLifecycleInitialization();
 }

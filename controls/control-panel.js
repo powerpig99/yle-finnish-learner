@@ -67,9 +67,9 @@ class ControlPanel {
   /**
    * Mount the control panel to the DOM
    * @param {Object} [customConfig] - Override mount configuration
-   * @returns {Promise<HTMLElement|null>}
+   * @returns {HTMLElement|null}
    */
-  async mount(customConfig = {}) {
+  mount(customConfig = {}) {
     const config = Object.assign(this.getMountConfig(), customConfig);
 
     // Remove existing panel if present
@@ -78,22 +78,9 @@ class ControlPanel {
     // Create the panel element
     this.element = this._createPanel();
 
-    // Find the mount target with exponential backoff
-    let target = null;
-    if (config.selector) {
-      // Wait for the target element with increasing delays
-      // Total wait: ~8 seconds (200+200+400+400+800+800+1000+1000+1500+1500 = 7800ms)
-      const delays = [200, 200, 400, 400, 800, 800, 1000, 1000, 1500, 1500];
-      for (let i = 0; i < delays.length; i++) {
-        target = document.querySelector(config.selector);
-        if (target) break;
-        await new Promise(r => setTimeout(r, delays[i]));
-      }
-    }
+    const target = config.selector ? document.querySelector(config.selector) : null;
 
     if (!target) {
-      // Log as warning instead of error - mounting will be retried
-      console.warn('DualSubExtension: Mount target not found yet, will retry');
       return null;
     }
 

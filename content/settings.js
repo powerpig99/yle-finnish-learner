@@ -171,6 +171,15 @@ function setupVideoSpeedControl() {
                 scheduleAutoPause();
             }
         });
+        // "New video" on source swap: same element, new src during SPA navigation.
+        video.addEventListener('loadstart', () => {
+            if (typeof loadMovieCacheAndUpdateMetadata !== 'function') {
+                return;
+            }
+            loadMovieCacheAndUpdateMetadata().catch((error) => {
+                console.error("YleDualSubExtension: Error loading movie cache on source change:", error);
+            });
+        });
         // CC ON/OFF detection via TextTrack API
         // YLE sets track.mode to 'hidden' when CC is on, 'disabled' when off.
         // The 'change' event fires immediately when the user toggles CC in YLE's menu.
@@ -195,13 +204,12 @@ function setupVideoSpeedControl() {
         video.textTracks.addEventListener('change', () => syncCcState('change'));
         video.textTracks.addEventListener('addtrack', () => syncCcState('addtrack'));
         video.textTracks.addEventListener('removetrack', () => syncCcState('removetrack'));
-        // Text tracks may initialize asynchronously after video appears.
-        setTimeout(() => syncCcState('post-init-300ms'), 300);
-        setTimeout(() => syncCcState('post-init-1000ms'), 1000);
     }
 }
-// Initial setup after a short delay
-setTimeout(setupVideoSpeedControl, 500);
+// Initial setup for live-page injection (video already present).
+if (document.querySelector('video')) {
+    setupVideoSpeedControl();
+}
 /**
  * Check if a valid translation provider is configured
  * Google Translate works without an API key, so it's always valid

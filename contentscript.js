@@ -37,8 +37,6 @@ async function initializeUnifiedControlPanel() {
     }
     // Mark as initializing to prevent concurrent calls
     _unifiedPanelInitializing = true;
-    // Wait briefly for player controls/container to settle before mounting panel
-    await new Promise(resolve => setTimeout(resolve, 500));
     try {
         await startSettingsBootstrap();
         // Check initial captions state (YLE requires manual captions enable)
@@ -203,25 +201,20 @@ async function addDualSubExtensionSection() {
 }
 /**
  * Get video title once the video player is loaded
- * @returns {Promise<string | null>}
+ * @returns {string | null}
  */
-async function getVideoTitle() {
-    let titleElement = null;
-    for (let attempt = 0; attempt < 8; attempt++) {
-        titleElement = document.querySelector('[class*="VideoTitle__Titles"]');
-        if (titleElement) {
-            break;
+function getVideoTitle() {
+    const titleElement = document.querySelector('[class*="VideoTitle__Titles"]');
+    if (titleElement) {
+        const texts = Array.from(titleElement.querySelectorAll('span'))
+            .map(span => (span.textContent || '').trim())
+            .filter(text => text.length > 0);
+        if (texts.length > 0) {
+            return texts.join(" | ");
         }
-        await sleep(150);
     }
-    if (!titleElement) {
-        console.error("YleDualSubExtension: Cannot get movie name. Title Element is null.");
-        return null;
-    }
-    const texts = Array.from(titleElement.querySelectorAll('span'))
-        .map(span => (span.textContent || '').trim())
-        .filter(text => text.length > 0);
-    return texts.join(" | ");
+    const fallbackTitle = (document.title || '').trim();
+    return fallbackTitle || null;
 }
 // ==================================
 // END SECTION
@@ -244,7 +237,7 @@ async function loadMovieCacheAndUpdateMetadata(movieName) {
         currentMovieName = movieName;
     }
     else {
-        currentMovieName = await getVideoTitle();
+        currentMovieName = getVideoTitle();
     }
     if (!currentMovieName) {
         return;
@@ -277,6 +270,12 @@ document.addEventListener("sendBatchTranslationEvent", (e) => {
         console.error("DualSubExtension: Error in batch translation:", error);
     });
 });
+// Bootstrap panel mount for live-page injection where control bar already exists.
+if (document.querySelector('[class^="BottomControlBar__LeftControls"]')) {
+    addDualSubExtensionSection().catch((error) => {
+        console.error("YleDualSubExtension: Error adding dual sub extension section:", error);
+    });
+}
 // ==================================
 // END UNIFIED CONTROL PANEL SECTION
 // ==================================

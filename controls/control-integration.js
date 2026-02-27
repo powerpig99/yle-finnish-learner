@@ -14,11 +14,8 @@ const ControlIntegration = {
   /** @type {Promise<ControlPanel|null>|null} */
   _initPromise: null,
 
-  /** @type {ReturnType<typeof setTimeout>|null} */
-  _remountTimer: null,
-
-  /** @type {boolean} */
-  _remountScheduled: false,
+  /** @type {MutationObserver|null} */
+  _mountObserver: null,
 
   /** @type {boolean} */
   _captionsEnabled: true,
@@ -61,6 +58,11 @@ const ControlIntegration = {
     }
 
     this._initPromise = (async () => {
+      if (this._mountObserver) {
+        this._mountObserver.disconnect();
+        this._mountObserver = null;
+      }
+
       // Load preferences from storage first
       await this._loadPreferences();
       this._applyInitOptions(options);
@@ -104,13 +106,11 @@ const ControlIntegration = {
         });
       }
 
-      // Mount or remount the panel with retry logic
-      const element = this._panel.isMounted() ? this._panel.element : await this._panel.mount();
+      // Mount panel if target is present.
+      const element = this._panel.isMounted() ? this._panel.element : this._panel.mount();
 
-      if (element) {
-      } else {
-        // Schedule retry mounts if initial mount fails
-        this._scheduleRemount();
+      if (!element) {
+        this._watchForMountTarget();
       }
 
       return this._panel;
@@ -124,39 +124,36 @@ const ControlIntegration = {
   },
 
   /**
-   * Schedule retry mounts with increasing delays
+   * Watch for mount target if init raced with a temporary DOM teardown.
    * @private
    */
-  _scheduleRemount() {
-    if (this._remountScheduled) return;
-    this._remountScheduled = true;
+  _watchForMountTarget() {
+    if (this._mountObserver) return;
+    if (!(document.body instanceof Node)) return;
 
-    const retryDelays = [2000, 4000, 8000]; // Retry at 2s, 4s, 8s
-    let retryIndex = 0;
-
-    const attemptRemount = async () => {
+    this._mountObserver = new MutationObserver(() => {
       if (!this._panel || this._panel.isMounted()) {
-        this._remountScheduled = false;
-        this._remountTimer = null;
+        this._mountObserver?.disconnect();
+        this._mountObserver = null;
+        return;
+      }
+      if (!document.querySelector('[class^="BottomControlBar__LeftControls"]')) {
         return;
       }
 
-      const element = await this._panel.mount();
+      this._mountObserver?.disconnect();
+      this._mountObserver = null;
 
-      if (element) {
-        this._remountScheduled = false;
-        this._remountTimer = null;
-      } else if (retryIndex < retryDelays.length - 1) {
-        retryIndex++;
-        this._remountTimer = setTimeout(attemptRemount, retryDelays[retryIndex]);
-      } else {
-        console.error('DualSubExtension: Could not find mount target after all retries');
-        this._remountScheduled = false;
-        this._remountTimer = null;
+      const element = this._panel.mount();
+      if (!element) {
+        this._watchForMountTarget();
       }
-    };
+    });
 
-    this._remountTimer = setTimeout(attemptRemount, retryDelays[0]);
+    this._mountObserver.observe(document.body, {
+      childList: true,
+      subtree: true
+    });
   },
 
   /**
