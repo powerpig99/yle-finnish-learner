@@ -44,6 +44,7 @@
     "https://areena.yle.fi/*",
     "https://api-free.deepl.com/*",
     "https://translate.googleapis.com/*",
+    "https://translation.googleapis.com/*",
     "https://api.anthropic.com/*",
     "https://generativelanguage.googleapis.com/*",
     "https://api.x.ai/*",

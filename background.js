@@ -8,6 +8,7 @@ async function loadProviderConfig() {
     try {
         const result = await chrome.storage.sync.get([
             'translationProvider',
+            'googleCloudApiKey',
             'deeplApiKey',
             'claudeApiKey',
             'geminiApiKey',
@@ -18,6 +19,7 @@ async function loadProviderConfig() {
             currentProvider.provider = result.translationProvider;
             // Get the API key for the current provider
             const apiKeyMap = {
+                googleCloud: result.googleCloudApiKey,
                 deepl: result.deeplApiKey,
                 claude: result.claudeApiKey,
                 gemini: result.geminiApiKey,
@@ -34,7 +36,7 @@ async function loadProviderConfig() {
 // Listen for storage changes
 chrome.storage.onChanged.addListener((changes, namespace) => {
     if (namespace === 'sync') {
-        const providerKeys = ['translationProvider', 'deeplApiKey', 'claudeApiKey', 'geminiApiKey', 'grokApiKey', 'kimiApiKey'];
+        const providerKeys = ['translationProvider', 'googleCloudApiKey', 'deeplApiKey', 'claudeApiKey', 'geminiApiKey', 'grokApiKey', 'kimiApiKey'];
         if (providerKeys.some(key => changes[key])) {
             loadProviderConfig();
         }
@@ -255,6 +257,8 @@ async function translateTexts(texts, targetLanguage) {
     switch (provider) {
         case 'google':
             return translateWithGoogle(texts, targetLanguage);
+        case 'googleCloud':
+            return translateWithGoogleCloud(texts, targetLanguage);
         case 'deepl':
             return translateWithDeepL(texts, targetLanguage);
         case 'claude':
@@ -279,8 +283,8 @@ async function translateTexts(texts, targetLanguage) {
  */
 async function translateBatchWithContext(texts, targetLanguage, isContextual) {
     const provider = currentProvider.provider;
-    // For Google and DeepL, use regular translation (they don't benefit from context prompts)
-    if (provider === 'google' || provider === 'deepl') {
+    // For standard translation APIs, use regular translation (they don't benefit from context prompts)
+    if (provider === 'google' || provider === 'googleCloud' || provider === 'deepl') {
         return translateTextsWithErrorHandling(texts, targetLanguage);
     }
     // For AI providers, use contextual translation
@@ -449,17 +453,9 @@ ${texts.join('\n')}`;
  */
 async function translateWordWithContext(word, context, targetLanguage, langName) {
     const provider = currentProvider.provider;
-    // For Google Translate, fall back to simple translation (no context support)
-    if (provider === 'google') {
-        const result = await translateWithGoogle([word], targetLanguage);
-        if (result[0] && Array.isArray(result[1])) {
-            return [true, result[1][0]]; // Extract first translation from array
-        }
-        return result;
-    }
-    // For DeepL, also fall back to simple translation
-    if (provider === 'deepl') {
-        const result = await translateWithDeepL([word], targetLanguage);
+    // Standard translation APIs: use simple word translation (no context prompt support)
+    if (provider === 'google' || provider === 'googleCloud' || provider === 'deepl') {
+        const result = await translateTexts([word], targetLanguage);
         if (result[0] && Array.isArray(result[1])) {
             return [true, result[1][0]]; // Extract first translation from array
         }
@@ -562,6 +558,85 @@ function convertToGoogleLangCode(langCode) {
         'ZH-HANT': 'zh-TW', // Traditional Chinese
     };
     return mapping[langCode] || langCode.toLowerCase().split('-')[0];
+}
+async function getGoogleCloudErrorDetail(response) {
+    try {
+        const text = await response.text();
+        if (!text) {
+            return '';
+        }
+        try {
+            const data = JSON.parse(text);
+            if (data?.error?.message) {
+                return String(data.error.message);
+            }
+        }
+        catch {
+            // fall through to raw text
+        }
+        return text.trim();
+    }
+    catch (error) {
+        console.warn('YleDualSubExtension: Failed to read Google Cloud error detail:', error);
+        return '';
+    }
+}
+// ==================================
+// GOOGLE CLOUD TRANSLATION (PAID API)
+// ==================================
+/**
+ * Translate using Google Cloud Translation Basic (v2) API
+ * @param {string[]} texts - Texts to translate
+ * @param {string} targetLanguage - Target language code
+ * @returns {Promise<[true, string[]]|[false, string]>}
+ */
+async function translateWithGoogleCloud(texts, targetLanguage) {
+    const apiKey = currentProvider.apiKey;
+    if (!apiKey) {
+        return [false, 'Google Cloud API key not configured. Please add your API key in settings.'];
+    }
+    const url = `https://translation.googleapis.com/language/translate/v2?key=${apiKey}`;
+    try {
+        const response = await fetch(url, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                q: texts,
+                target: convertToGoogleLangCode(targetLanguage),
+                // Use plain text mode to avoid HTML entity escaping in subtitle output.
+                format: 'text'
+            })
+        });
+        if (!response.ok) {
+            const status = response.status;
+            const detail = await getGoogleCloudErrorDetail(response);
+            if (status === 403) {
+                return [false, `Google Cloud access denied (invalid key, API disabled, billing disabled, or key restrictions)${detail ? `: ${detail}` : ''}`];
+            }
+            if (status === 429) {
+                return [false, `Google Cloud rate limit exceeded${detail ? `: ${detail}` : ''}`];
+            }
+            if (status === 503) {
+                return [false, `Google Cloud service unavailable (503)${detail ? ` - ${detail}` : ''}`];
+            }
+            if (status >= 500) {
+                return [false, `Google Cloud server error: ${status}${detail ? ` - ${detail}` : ''}`];
+            }
+            return [false, `Google Cloud error: ${status}${detail ? ` - ${detail}` : ''}`];
+        }
+        const data = await response.json();
+        const translations = data?.data?.translations;
+        if (!Array.isArray(translations)) {
+            return [false, 'Google Cloud error: malformed response'];
+        }
+        return [true, translations.map(item => item?.translatedText ?? null)];
+    }
+    catch (error) {
+        console.error('YleDualSubExtension: Google Cloud error:', error);
+        return [false, 'Google Cloud translation failed: ' + (error.message || String(error))];
+    }
 }
 // ==================================
 // DEEPL TRANSLATION

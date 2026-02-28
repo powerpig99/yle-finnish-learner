@@ -218,6 +218,9 @@ async function handleBatchTranslation(subtitles) {
     }
     isBatchTranslating = true;
     try {
+        const translationProvider = typeof getCurrentTranslationProvider === 'function'
+            ? getCurrentTranslationProvider()
+            : 'google';
         // Pre-populate full subtitles for skip/repeat features.
         const existingFullSubtitleKeys = new Set(fullSubtitles.map(sub => buildFullSubtitleKey(sub.startTime, sub.endTime, sub.text)));
         for (const sub of subtitles) {
@@ -251,8 +254,8 @@ async function handleBatchTranslation(subtitles) {
         for (let chunkIndex = 0; chunkIndex < chunks.length; chunkIndex++) {
             const chunk = chunks[chunkIndex];
             const texts = chunk.map(sub => sub.text);
-            // Add delay between chunks to avoid rate limiting
-            if (chunkIndex > 0) {
+            // Delay only for free Google scraper endpoint to reduce rate-limit pressure.
+            if (chunkIndex > 0 && translationProvider === 'google') {
                 await sleep(500);
             }
             try {

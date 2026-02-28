@@ -72,14 +72,42 @@ Click the extension icon → Settings to:
 
 ### Translation Providers
 
-| Provider | API Key Required | Best For |
-|----------|-----------------|----------|
-| Google Translate | No | Quick setup, basic translations |
-| DeepL | Yes (free tier available) | High-quality translations |
-| Claude | Yes | Context-aware word lookups |
-| Gemini | Yes | Context-aware word lookups |
-| Grok | Yes | Context-aware word lookups |
-| Kimi | Yes | Context-aware word lookups |
+You can choose your translation engine in Settings. The default is free Google Translate; all other providers require your own API key.
+
+> **Cost disclaimer:** The estimates below are illustrative and speculative, not billing guarantees.
+
+| Provider | API Key Required | Notes | Illustrative monthly cost notes (speculative) |
+|----------|------------------|-------|-----------------------------------------------|
+| Google Translate | No | Default free provider. Uses throttling to reduce free-endpoint rate limits. | `$0` direct API spend in this extension (free endpoint), but rate limits and slower throughput may affect UX. |
+| Google Cloud (v2) | Yes | Paid Google Cloud Translation API. Usage charges apply. | Character-based billing. Using scenarios below: Light `0.24*R`, Regular `0.72*R`, Heavy `1.44*R` where `R = price per 1M chars`. |
+| DeepL | Yes | Uses DeepL API key (free or paid plan depending on your account). | If on paid per-character pricing: Light `0.24*D`, Regular `0.72*D`, Heavy `1.44*D` where `D = price per 1M chars` (or equivalent plan cost). |
+| Claude | Yes | Uses Anthropic API key for contextual translation. | Token-based. Approximate with: `monthly_cost ~= (billable_tokens/1M) * C`, where `C = your Claude rate per 1M tokens`. |
+| Gemini | Yes | Uses Google AI Studio API key for contextual translation. | Token/request-based by model/plan. Approximate with: `monthly_cost ~= (billable_tokens/1M) * G`, where `G = your Gemini rate per 1M tokens`. |
+| Grok | Yes | Uses xAI API key for contextual translation. | Token-based. Approximate with: `monthly_cost ~= (billable_tokens/1M) * X`, where `X = your Grok rate per 1M tokens`. |
+| Kimi | Yes | Uses Moonshot API key for contextual translation. | Token-based. Approximate with: `monthly_cost ~= (billable_tokens/1M) * K`, where `K = your Kimi rate per 1M tokens`. |
+
+> **Note on Google Cloud:** Billing is character-based. Set API key restrictions, quota limits, and budget alerts before enabling it.
+>
+> **Quick cost estimator (illustrative):**
+> - `monthly_characters ~= watched_minutes_per_month * characters_per_minute`
+> - `monthly_cost ~= (monthly_characters / 1,000,000) * price_per_1M_characters`
+>
+> **Example scenarios (for planning only):**
+> - Light use: `~300 min/month * ~800 chars/min ~= 240,000 chars/month`
+> - Regular use: `~900 min/month * ~800 chars/min ~= 720,000 chars/month`
+> - Heavy use: `~1,800 min/month * ~800 chars/min ~= 1,440,000 chars/month`
+>
+> If your current Google Cloud rate is `R` per 1M characters, estimated monthly cost is:
+> - Light: `0.24 * R`
+> - Regular: `0.72 * R`
+> - Heavy: `1.44 * R`
+>
+> **Token-based providers (Claude/Gemini/Grok/Kimi) rough framework (illustrative):**
+> - `billable_tokens ~= (monthly_characters / chars_per_token) * overhead_factor`
+> - `monthly_cost ~= (billable_tokens / 1,000,000) * provider_rate_per_1M_tokens`
+> - Typical planning assumptions (speculative): `chars_per_token ~= 4`, `overhead_factor ~= 1.2 to 2.0` (prompt + context + retries).
+>
+> Check current rates on the official pricing page: https://cloud.google.com/translate/pricing
 
 ## How It Works
 

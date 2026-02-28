@@ -4,6 +4,7 @@ const DEFAULT_PROVIDER = 'google';
 
 const PROVIDERS = [
   { id: 'google', name: 'Google Translate', description: 'Free, no API key needed' },
+  { id: 'googleCloud', name: 'Google Cloud (API Key)', description: 'Paid - usage charges apply', link: 'https://console.cloud.google.com/apis/library/translate.googleapis.com' },
   { id: 'deepl', name: 'DeepL', description: 'Best for Finnish', link: 'https://www.deepl.com/en/your-account/keys' },
   { id: 'claude', name: 'Claude (Anthropic)', description: 'High quality AI', link: 'https://console.anthropic.com/settings/keys' },
   { id: 'gemini', name: 'Gemini (Google AI)', description: "Google's AI model", link: 'https://aistudio.google.com/apikey' },
@@ -60,6 +61,7 @@ const LANGUAGES = [
 
 const STORAGE_KEYS = [
   'translationProvider',
+  'googleCloudApiKey',
   'deeplApiKey',
   'claudeApiKey',
   'geminiApiKey',
@@ -72,6 +74,7 @@ const STORAGE_KEYS = [
 const state = {
   translationProvider: DEFAULT_PROVIDER,
   apiKeys: {
+    googleCloud: '',
     deepl: '',
     claude: '',
     gemini: '',
@@ -318,6 +321,7 @@ async function loadSettings() {
     }
 
     state.apiKeys = {
+      googleCloud: typeof result.googleCloudApiKey === 'string' ? result.googleCloudApiKey : '',
       deepl: typeof result.deeplApiKey === 'string' ? result.deeplApiKey : '',
       claude: typeof result.claudeApiKey === 'string' ? result.claudeApiKey : '',
       gemini: typeof result.geminiApiKey === 'string' ? result.geminiApiKey : '',

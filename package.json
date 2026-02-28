@@ -1,7 +1,7 @@
 {
   "scripts": {
-    "test": "node --test tests/unit/database.test.js",
-    "test:watch": "node --test --watch tests/unit/database.test.js",
+    "test": "node --test tests/unit/*.test.js",
+    "test:watch": "node --test --watch tests/unit/*.test.js",
     "validate": "npm test",
     "release:gate": "bash scripts/release-gate.sh"
   }

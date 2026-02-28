@@ -34,6 +34,21 @@ let playbackSpeed = 1.0;
 // State of Extension Enabled (global on/off toggle)
 let extensionEnabled = true;
 let detectedSourceLanguage = null;
+let translationProvider = 'google';
+function getCurrentTranslationProvider() {
+    return translationProvider;
+}
+async function loadTranslationProviderPreference() {
+    try {
+        const result = await chrome.storage.sync.get(['translationProvider']);
+        if (typeof result.translationProvider === 'string' && result.translationProvider.length > 0) {
+            translationProvider = result.translationProvider;
+        }
+    }
+    catch (error) {
+        console.warn('DualSubExtension: Error loading translation provider preference:', error);
+    }
+}
 /**
  * Load extension enabled state from Chrome storage
  */
@@ -219,6 +234,7 @@ async function checkHasValidProvider() {
     try {
         const result = await chrome.storage.sync.get([
             'translationProvider',
+            'googleCloudApiKey',
             'deeplApiKey',
             'claudeApiKey',
             'geminiApiKey',
@@ -232,6 +248,7 @@ async function checkHasValidProvider() {
         }
         // Provider-specific key lookup.
         const keyMap = {
+            googleCloud: result.googleCloudApiKey,
             deepl: result.deeplApiKey,
             claude: result.claudeApiKey,
             gemini: result.geminiApiKey,
@@ -421,6 +438,7 @@ function startSettingsBootstrap() {
             loadAutoPausePreference(),
             loadExtensionEnabledState(),
             loadPlaybackSpeedPreference(),
+            loadTranslationProviderPreference(),
         ]).catch((error) => {
             console.warn('DualSubExtension: Settings bootstrap failed:', error);
         });
@@ -434,11 +452,15 @@ chrome.storage.onChanged.addListener(async (changes, namespace) => {
         return;
     }
     if (changes.translationProvider ||
+        changes.googleCloudApiKey ||
         changes.deeplApiKey ||
         changes.claudeApiKey ||
         changes.geminiApiKey ||
         changes.grokApiKey ||
         changes.kimiApiKey) {
+        if (changes.translationProvider && typeof changes.translationProvider.newValue === 'string') {
+            translationProvider = changes.translationProvider.newValue || 'google';
+        }
         const hasValidProvider = await checkHasValidProvider();
         // Unified control panel migration: warning state is managed by dsc panel.
         ControlIntegration.updateState({
