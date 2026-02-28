@@ -73,6 +73,12 @@ const STORAGE_KEYS = [
 
 const state = {
   translationProvider: DEFAULT_PROVIDER,
+  /**
+   * Provider-specific API key state.
+   * Keep provider->key mapping in sync with:
+   * - background.js (loadProviderConfig apiKeyMap)
+   * - content/settings.js (checkHasValidProvider keyMap)
+   */
   apiKeys: {
     googleCloud: '',
     deepl: '',

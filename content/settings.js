@@ -246,7 +246,12 @@ async function checkHasValidProvider() {
         if (provider === 'google') {
             return true;
         }
-        // Provider-specific key lookup.
+        /**
+         * Provider-specific key lookup.
+         * Keep provider->key mapping in sync with:
+         * - background.js (loadProviderConfig apiKeyMap)
+         * - extension-options-page/options.js (state.apiKeys)
+         */
         const keyMap = {
             googleCloud: result.googleCloudApiKey,
             deepl: result.deeplApiKey,

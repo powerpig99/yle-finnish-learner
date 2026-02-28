@@ -17,7 +17,12 @@ async function loadProviderConfig() {
         ]);
         if (result.translationProvider) {
             currentProvider.provider = result.translationProvider;
-            // Get the API key for the current provider
+            /**
+             * Provider-specific API key lookup.
+             * Keep provider->key mapping in sync with:
+             * - content/settings.js (checkHasValidProvider keyMap)
+             * - extension-options-page/options.js (state.apiKeys)
+             */
             const apiKeyMap = {
                 googleCloud: result.googleCloudApiKey,
                 deepl: result.deeplApiKey,
@@ -559,7 +564,10 @@ function convertToGoogleLangCode(langCode) {
     };
     return mapping[langCode] || langCode.toLowerCase().split('-')[0];
 }
-async function getGoogleCloudErrorDetail(response) {
+/**
+ * Shared response error-body extractor used by Google Cloud and Kimi providers.
+ */
+async function getResponseErrorDetail(response, providerLabel) {
     try {
         const text = await response.text();
         if (!text) {
@@ -577,7 +585,7 @@ async function getGoogleCloudErrorDetail(response) {
         return text.trim();
     }
     catch (error) {
-        console.warn('YleDualSubExtension: Failed to read Google Cloud error detail:', error);
+        console.warn(`YleDualSubExtension: Failed to read ${providerLabel} error detail:`, error);
         return '';
     }
 }
@@ -611,7 +619,7 @@ async function translateWithGoogleCloud(texts, targetLanguage) {
         });
         if (!response.ok) {
             const status = response.status;
-            const detail = await getGoogleCloudErrorDetail(response);
+            const detail = await getResponseErrorDetail(response, 'Google Cloud');
             if (status === 403) {
                 return [false, `Google Cloud access denied (invalid key, API disabled, billing disabled, or key restrictions)${detail ? `: ${detail}` : ''}`];
             }
@@ -748,27 +756,6 @@ ${texts.join('\n')}`;
 // ==================================
 // KIMI TRANSLATION
 // ==================================
-async function getKimiErrorDetail(response) {
-    try {
-        const text = await response.text();
-        if (!text)
-            return '';
-        try {
-            const data = JSON.parse(text);
-            if (data?.error?.message) {
-                return String(data.error.message);
-            }
-        }
-        catch {
-            // fall through to raw text
-        }
-        return text.trim();
-    }
-    catch (error) {
-        console.warn('YleDualSubExtension: Failed to read Kimi error detail:', error);
-        return '';
-    }
-}
 async function requestKimiCompletion(prompt, maxTokens) {
     const apiKey = currentProvider.apiKey;
     if (!apiKey) {
@@ -791,7 +778,7 @@ async function requestKimiCompletion(prompt, maxTokens) {
         });
         if (!response.ok) {
             const status = response.status;
-            const detail = await getKimiErrorDetail(response);
+            const detail = await getResponseErrorDetail(response, 'Kimi');
             if (status === 401)
                 return [false, 'Invalid Kimi API key'];
             if (status === 429)

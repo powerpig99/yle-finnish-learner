@@ -218,9 +218,7 @@ async function handleBatchTranslation(subtitles) {
     }
     isBatchTranslating = true;
     try {
-        const translationProvider = typeof getCurrentTranslationProvider === 'function'
-            ? getCurrentTranslationProvider()
-            : 'google';
+        const translationProvider = getCurrentTranslationProvider();
         // Pre-populate full subtitles for skip/repeat features.
         const existingFullSubtitleKeys = new Set(fullSubtitles.map(sub => buildFullSubtitleKey(sub.startTime, sub.endTime, sub.text)));
         for (const sub of subtitles) {
