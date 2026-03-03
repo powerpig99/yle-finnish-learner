@@ -46,21 +46,22 @@ async function sendTranslationMessageWithRetry(action, data, errorContext) {
 async function fetchBatchTranslation(texts) {
     return sendTranslationMessageWithRetry(
         'fetchBatchTranslation',
-        { texts, targetLanguage, isContextual: true },
+        { texts, targetLanguage, isContextual: true, sourceLanguage: detectedSourceLanguage },
         'batch translation request'
     );
 }
 /**
  *
- * @param {Array<string>} rawSubtitleFinnishTexts - Finnish text to translate
+ * @param {Array<string>} rawSubtitleTexts - Source subtitle texts to translate
  * @returns {Promise<[true, Array<string>]|[false, string]>} - Returns a tuple where the first element
  * indicates success and the second is either translated texts or an error message.
 
  */
-async function fetchTranslation(rawSubtitleFinnishTexts) {
+async function fetchTranslation(rawSubtitleTexts) {
     return sendTranslationMessageWithRetry(
         'fetchTranslation',
-        { rawSubtitleFinnishTexts, targetLanguage },
+        // Send both keys during transition to avoid any runtime version skew.
+        { rawSubtitleTexts, rawSubtitleFinnishTexts: rawSubtitleTexts, targetLanguage },
         'message to background for translation'
     );
 }

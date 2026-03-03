@@ -293,11 +293,16 @@ function addContentToDisplayedSubtitlesWrapper(displayedSubtitlesWrapper, origin
     if (dualSubEnabled && shouldTranslate()) {
         const translationKey = toTranslationKey(finnishText);
         const stateEntry = subtitleState.get(translationKey);
+        const hasTranslatableContent = hasTranslatableSubtitleContent(finnishText);
         let targetLanguageText = "Translating...";
         let shouldTrackPendingSpan = false;
         let shouldStartQueueProcessing = false;
         let failedEntryForFallback = null;
-        if (stateEntry?.status === 'success' && stateEntry.text) {
+        if (!hasTranslatableContent) {
+            targetLanguageText = finnishText;
+            setPassThroughSubtitleState(finnishText);
+        }
+        else if (stateEntry?.status === 'success' && stateEntry.text) {
             targetLanguageText = stateEntry.text;
         }
         else if (stateEntry?.status === 'failed') {

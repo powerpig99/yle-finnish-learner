@@ -174,6 +174,16 @@ function extractFunctionSource(fileSource, signature) {
 }
 
 describe('Google Cloud provider integration', () => {
+    test('normalizeTranslatedLines pads missing rows with null instead of source text', () => {
+        const { context } = buildBackgroundHarness();
+
+        const translations = context.normalizeTranslatedLines('line one', ['source one', 'source two']);
+
+        assert.equal(translations.length, 2);
+        assert.equal(translations[0], 'line one');
+        assert.equal(translations[1], null);
+    });
+
     test('routes translateTexts to Google Cloud implementation when provider is googleCloud', async () => {
         const { context } = buildBackgroundHarness({
             translationProvider: 'googleCloud',

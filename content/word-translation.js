@@ -447,7 +447,8 @@ async function translateWordWithLLM(word, context) {
                 word,
                 context: contextText,
                 targetLanguage,
-                langName
+                langName,
+                sourceLanguage: detectedSourceLanguage
             }
         });
         if (response === null) {

@@ -64,22 +64,25 @@ chrome.storage.onChanged.addListener((changes, namespace) => {
 // ==================================
 chrome.runtime.onMessage.addListener((request, _sender, sendResponse) => {
     if (request.action === 'fetchTranslation') {
-        const { rawSubtitleFinnishTexts, targetLanguage } = request.data;
-        translateTextsWithErrorHandling(rawSubtitleFinnishTexts, targetLanguage)
+        const { rawSubtitleTexts, rawSubtitleFinnishTexts, targetLanguage } = request.data;
+        const textsToTranslate = Array.isArray(rawSubtitleTexts)
+            ? rawSubtitleTexts
+            : (Array.isArray(rawSubtitleFinnishTexts) ? rawSubtitleFinnishTexts : []);
+        translateTextsWithErrorHandling(textsToTranslate, targetLanguage)
             .then(sendResponse)
             .catch((error) => sendResponse([false, error.message || String(error)]));
         return true;
     }
     if (request.action === 'fetchBatchTranslation') {
-        const { texts, targetLanguage, isContextual } = request.data;
-        translateBatchWithContext(texts, targetLanguage, isContextual)
+        const { texts, targetLanguage, isContextual, sourceLanguage } = request.data;
+        translateBatchWithContext(texts, targetLanguage, isContextual, sourceLanguage)
             .then(sendResponse)
             .catch((error) => sendResponse([false, error.message || String(error)]));
         return true;
     }
     if (request.action === 'translateWordWithContext') {
-        const { word, context, targetLanguage, langName } = request.data;
-        translateWordWithContext(word, context, targetLanguage, langName)
+        const { word, context, targetLanguage, langName, sourceLanguage } = request.data;
+        translateWordWithContext(word, context, targetLanguage, langName, sourceLanguage)
             .then(sendResponse)
             .catch((error) => sendResponse([false, error.message || String(error)]));
         return true;
@@ -296,9 +299,10 @@ async function translateTexts(texts, targetLanguage) {
  * @param {string[]} texts - Texts to translate
  * @param {string} targetLanguage - Target language code
  * @param {boolean} isContextual - Whether to use contextual translation
+ * @param {string|null} [sourceLanguage] - Optional detected source language code
  * @returns {Promise<[true, string[]]|[false, string]>}
  */
-async function translateBatchWithContext(texts, targetLanguage, isContextual) {
+async function translateBatchWithContext(texts, targetLanguage, isContextual, sourceLanguage = null) {
     const provider = currentProvider.provider;
     // For standard translation APIs, use regular translation (they don't benefit from context prompts)
     if (provider === 'google' || provider === 'googleCloud' || provider === 'deepl') {
@@ -306,7 +310,7 @@ async function translateBatchWithContext(texts, targetLanguage, isContextual) {
     }
     // For AI providers, use contextual translation
     if (isContextual && (provider === 'claude' || provider === 'gemini' || provider === 'grok' || provider === 'kimi')) {
-        return translateWithContextualAI(texts, targetLanguage, provider);
+        return translateWithContextualAI(texts, targetLanguage, provider, sourceLanguage);
     }
     // Fallback to regular translation
     return translateTextsWithErrorHandling(texts, targetLanguage);
@@ -318,9 +322,29 @@ function normalizeTranslatedLines(content, originals) {
         .filter(Boolean)
         .slice(0, originals.length);
     while (translations.length < originals.length) {
-        translations.push(originals[translations.length]);
+        translations.push(null);
     }
     return translations;
+}
+
+function getContextualSourceGuidance(sourceLanguage) {
+    const normalizedSourceLanguage = typeof sourceLanguage === 'string'
+        ? normalizeLanguageCode(sourceLanguage)
+        : null;
+    if (normalizedSourceLanguage === 'fi') {
+        return 'Source is likely Finnish spoken language (puhekieli). Forms like "mä/sä", "miks", "tää", "yks", and "oo" are intentional colloquial Finnish; translate meaning naturally.';
+    }
+    return 'Source language may vary. Auto-detect source language from input and translate naturally.';
+}
+
+function getWordSourceGuidance(sourceLanguage) {
+    const normalizedSourceLanguage = typeof sourceLanguage === 'string'
+        ? normalizeLanguageCode(sourceLanguage)
+        : null;
+    if (normalizedSourceLanguage === 'fi') {
+        return 'Context may contain Finnish spoken language (puhekieli). Colloquial forms are intentional; translate the intended meaning.';
+    }
+    return 'Auto-detect source language from the word and context before translating.';
 }
 
 function mapAiProviderStatusError(provider, status) {
@@ -427,15 +451,18 @@ async function requestAiProviderText(provider, prompt, maxTokens) {
  * @param {string[]} texts - Texts to translate
  * @param {string} targetLanguage - Target language code
  * @param {string} provider - AI provider name
+ * @param {string|null} [sourceLanguage] - Optional detected source language code
  * @returns {Promise<[true, string[]]|[false, string]>}
  */
-async function translateWithContextualAI(texts, targetLanguage, provider) {
+async function translateWithContextualAI(texts, targetLanguage, provider, sourceLanguage = null) {
     const langName = getLanguageName(targetLanguage);
-    const contextualPrompt = `You are a subtitle translator. Translate these TV subtitles to ${langName}. Auto-detect source language.
+    const sourceGuidance = getContextualSourceGuidance(sourceLanguage);
+    const contextualPrompt = `You are a subtitle translator. Translate these TV subtitles to ${langName}.
+${sourceGuidance}
 
 RULES:
-- ALWAYS translate - NEVER refuse, comment, or explain
-- Colloquial/slang is INTENTIONAL - translate naturally
+- ALWAYS translate every line - NEVER refuse, comment, or explain
+- Colloquial/spoken forms are INTENTIONAL - translate naturally
 - Return EXACTLY ${texts.length} lines, one per line
 - NO numbering, NO commentary, just translations
 
@@ -467,9 +494,10 @@ ${texts.join('\n')}`;
  * @param {string} context - The subtitle context (formatted string)
  * @param {string} targetLanguage - Target language code
  * @param {string} langName - Human-readable language name
+ * @param {string|null} [sourceLanguage] - Optional detected source language code
  * @returns {Promise<[true, string]|[false, string]>}
  */
-async function translateWordWithContext(word, context, targetLanguage, langName) {
+async function translateWordWithContext(word, context, targetLanguage, langName, sourceLanguage = null) {
     const provider = currentProvider.provider;
     // Standard translation APIs: use simple word translation (no context prompt support)
     if (provider === 'google' || provider === 'googleCloud' || provider === 'deepl') {
@@ -479,11 +507,12 @@ async function translateWordWithContext(word, context, targetLanguage, langName)
         }
         return result;
     }
+    const sourceGuidance = getWordSourceGuidance(sourceLanguage);
     const contextualPrompt = `Translate the word "${word}" to ${langName}. Context: "${context}"
+${sourceGuidance}
 
 RULES:
 - ALWAYS translate - never refuse or comment on spelling/grammar
-- Colloquial/slang/dialect forms are INTENTIONAL - translate them
 - Return ONLY the translation (1-5 words), nothing else
 - Consider context for the best meaning`;
     const [ok, content] = await requestAiProviderText(provider, contextualPrompt, 100);

@@ -109,8 +109,31 @@ let currentMovieName = null;
  * Memory cached current database connection to write data to Index DB
  */
 let globalDatabaseInstance = null;
-openDatabase().then(db => {
+const SUBTITLE_CACHE_HYGIENE_MIGRATION_KEY = 'subtitleCacheHygieneMigrationV1';
+
+async function runOneTimeSubtitleCacheHygiene(db) {
+    try {
+        const storageArea = chrome?.storage?.local;
+        if (!storageArea) {
+            return;
+        }
+        const migrationState = await storageArea.get([SUBTITLE_CACHE_HYGIENE_MIGRATION_KEY]);
+        if (migrationState?.[SUBTITLE_CACHE_HYGIENE_MIGRATION_KEY]) {
+            return;
+        }
+        const clearedCount = await clearAllSubtitles(db);
+        clearSubtitleTranslationState();
+        await storageArea.set({ [SUBTITLE_CACHE_HYGIENE_MIGRATION_KEY]: true });
+        console.info(`YleDualSubExtension: One-time subtitle cache hygiene completed. Cleared ${clearedCount} entries.`);
+    }
+    catch (error) {
+        console.warn("YleDualSubExtension: One-time subtitle cache hygiene failed:", error);
+    }
+}
+
+openDatabase().then(async (db) => {
     globalDatabaseInstance = db;
+    await runOneTimeSubtitleCacheHygiene(db);
     cleanupOldMovieData(db).catch(error => { console.error("YleDualSubExtension: Error when cleaning old movie data: ", error); });
 }).catch((error) => {
     console.error("YleDualSubExtension: Failed to established connection to indexDB: ", error);
@@ -244,11 +267,25 @@ async function loadMovieCacheAndUpdateMetadata(movieName) {
     }
     const subtitleRecords = await loadSubtitlesByMovieName(db, currentMovieName, targetLanguage);
     for (const subtitleRecord of subtitleRecords) {
-        const key = toTranslationKey(subtitleRecord.originalText);
+        const originalText = String(subtitleRecord.originalText || '').trim().replace(/\n/g, ' ');
+        if (!originalText) {
+            continue;
+        }
+        const key = toTranslationKey(originalText);
         const translatedText = String(subtitleRecord.translatedText || '').trim().replace(/\n/g, ' ');
+        const hasTranslatableContent = hasTranslatableSubtitleContent(originalText);
+        if (hasTranslatableContent && toTranslationKey(translatedText) === toTranslationKey(originalText)) {
+            continue;
+        }
+        const resolvedText = hasTranslatableContent
+            ? translatedText
+            : originalText;
+        if (!resolvedText) {
+            continue;
+        }
         subtitleState.set(key, {
             status: 'success',
-            text: translatedText,
+            text: resolvedText,
             updatedAt: Date.now(),
         });
     }

@@ -23,6 +23,7 @@ const {
     saveSubtitlesBatch,
     loadSubtitlesByMovieName,
     clearSubtitlesByMovieName,
+    clearAllSubtitles,
     getMovieMetadata,
     upsertMovieMetadata,
     getAllMovieMetadata,
@@ -239,6 +240,24 @@ describe('Database Functions', () => {
         test('should return 0 when deleting non-existent movie', async () => {
             const deletedCount = await clearSubtitlesByMovieName(db, 'Non-existent Movie');
             assert.equal(deletedCount, 0);
+        });
+    });
+
+    describe('clearAllSubtitles', () => {
+        test('should delete every subtitle cache entry regardless of movie/language', async () => {
+            await saveSubtitleRecord(db, 'Movie 1', 'EN-US', 'hei', 'hello');
+            await saveSubtitleRecord(db, 'Movie 1', 'VI', 'kiitos', 'cam on');
+            await saveSubtitleRecord(db, 'Movie 2', 'EN-US', 'näkemiin', 'goodbye');
+
+            const deletedCount = await clearAllSubtitles(db);
+            const movie1English = await loadSubtitlesByMovieName(db, 'Movie 1', 'EN-US');
+            const movie1Vietnamese = await loadSubtitlesByMovieName(db, 'Movie 1', 'VI');
+            const movie2English = await loadSubtitlesByMovieName(db, 'Movie 2', 'EN-US');
+
+            assert.equal(deletedCount, 3);
+            assert.equal(movie1English.length, 0);
+            assert.equal(movie1Vietnamese.length, 0);
+            assert.equal(movie2English.length, 0);
         });
     });
 

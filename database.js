@@ -233,6 +233,43 @@ async function clearSubtitlesByMovieName(db, movieName) {
 }
 
 /**
+ * Clear all subtitle translations from IndexedDB.
+ * @param {IDBDatabase} db - Opening database instance
+ * @returns {Promise<number>} Number of subtitle records cleared
+ */
+async function clearAllSubtitles(db) {
+    return new Promise((resolve, reject) => {
+        try {
+            const transaction = db.transaction([SUBTITLE_CACHE_OBJECT_STORE], 'readwrite');
+            const objectStore = transaction.objectStore(SUBTITLE_CACHE_OBJECT_STORE);
+
+            const countRequest = objectStore.count();
+            countRequest.onsuccess = () => {
+                const count = countRequest.result;
+                const clearRequest = objectStore.clear();
+
+                clearRequest.onsuccess = () => {
+                    resolve(count);
+                };
+
+                clearRequest.onerror = (_event) => {
+                    console.error("YleDualSubExtension: clearAllSubtitles: Error clearing subtitles:", clearRequest.error);
+                    reject(clearRequest.error);
+                };
+            };
+
+            countRequest.onerror = (_event) => {
+                console.error("YleDualSubExtension: clearAllSubtitles: Error counting subtitles:", countRequest.error);
+                reject(countRequest.error);
+            };
+        } catch (error) {
+            console.error("YleDualSubExtension: clearAllSubtitles: Error in transaction:", error);
+            reject(error);
+        }
+    });
+}
+
+/**
  * Get movie metadata from IndexedDB
  * @param {IDBDatabase} db - Opening database instance
  * @param {string} movieName - The movie name
@@ -531,6 +568,7 @@ if (typeof module !== 'undefined' && typeof module.exports !== 'undefined') {
         saveSubtitlesBatch,
         loadSubtitlesByMovieName,
         clearSubtitlesByMovieName,
+        clearAllSubtitles,
         getMovieMetadata,
         upsertMovieMetadata,
         getAllMovieMetadata,
