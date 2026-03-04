@@ -347,29 +347,50 @@ function getWordSourceGuidance(sourceLanguage) {
     return 'Auto-detect source language from the word and context before translating.';
 }
 
-function mapAiProviderStatusError(provider, status) {
+function appendProviderErrorDetail(baseMessage, detail) {
+    if (typeof detail !== 'string' || !detail.trim()) {
+        return baseMessage;
+    }
+    return `${baseMessage} - ${detail.trim()}`;
+}
+
+function mapAiProviderStatusError(provider, status, detail = '') {
+    const withDetail = (message) => appendProviderErrorDetail(message, detail);
+
     if (provider === 'claude') {
         if (status === 401)
-            return 'Invalid Claude API key';
+            return withDetail('Invalid Claude API key');
+        if (status === 403)
+            return withDetail('Claude access denied (key lacks permission or account restrictions)');
         if (status === 429)
-            return 'Claude rate limit exceeded';
-        return `Claude error: ${status}`;
+            return withDetail('Claude rate limit exceeded');
+        if (status >= 500)
+            return withDetail(`Claude server error: ${status}`);
+        return withDetail(`Claude error: ${status}`);
     }
     if (provider === 'gemini') {
         if (status === 400)
-            return 'Invalid Gemini API key';
+            return withDetail('Invalid Gemini API key');
+        if (status === 403)
+            return withDetail('Gemini access denied (key lacks permission or project restrictions)');
         if (status === 429)
-            return 'Gemini rate limit exceeded';
-        return `Gemini error: ${status}`;
+            return withDetail('Gemini rate limit exceeded');
+        if (status >= 500)
+            return withDetail(`Gemini server error: ${status}`);
+        return withDetail(`Gemini error: ${status}`);
     }
     if (provider === 'grok') {
         if (status === 401)
-            return 'Invalid Grok API key';
+            return withDetail('Invalid Grok API key');
+        if (status === 403)
+            return withDetail('Grok access denied (check API key permissions and model access)');
         if (status === 429)
-            return 'Grok rate limit exceeded';
-        return `Grok error: ${status}`;
+            return withDetail('Grok rate limit exceeded');
+        if (status >= 500)
+            return withDetail(`Grok server error: ${status}`);
+        return withDetail(`Grok error: ${status}`);
     }
-    return `${provider} error: ${status}`;
+    return withDetail(`${provider} error: ${status}`);
 }
 
 async function requestAiProviderText(provider, prompt, maxTokens) {
@@ -398,7 +419,8 @@ async function requestAiProviderText(provider, prompt, maxTokens) {
                 })
             });
             if (!response.ok) {
-                return [false, mapAiProviderStatusError(provider, response.status)];
+                const detail = await getResponseErrorDetail(response, 'Claude');
+                return [false, mapAiProviderStatusError(provider, response.status, detail)];
             }
             const data = await response.json();
             return [true, data?.content?.[0]?.text || ''];
@@ -414,7 +436,8 @@ async function requestAiProviderText(provider, prompt, maxTokens) {
                 })
             });
             if (!response.ok) {
-                return [false, mapAiProviderStatusError(provider, response.status)];
+                const detail = await getResponseErrorDetail(response, 'Gemini');
+                return [false, mapAiProviderStatusError(provider, response.status, detail)];
             }
             const data = await response.json();
             return [true, data?.candidates?.[0]?.content?.parts?.[0]?.text || ''];
@@ -434,7 +457,8 @@ async function requestAiProviderText(provider, prompt, maxTokens) {
                 })
             });
             if (!response.ok) {
-                return [false, mapAiProviderStatusError(provider, response.status)];
+                const detail = await getResponseErrorDetail(response, 'Grok');
+                return [false, mapAiProviderStatusError(provider, response.status, detail)];
             }
             const data = await response.json();
             return [true, data?.choices?.[0]?.message?.content || ''];

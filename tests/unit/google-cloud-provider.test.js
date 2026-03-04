@@ -366,4 +366,25 @@ describe('Google Cloud provider integration', () => {
         assert.equal(result[0], true);
         assert.match(requestedUrls[0], /models\/gemini-2\.5-flash-lite:generateContent/);
     });
+
+    test('Grok surfaces 403 as access denied with provider detail', async () => {
+        const { context } = buildBackgroundHarness({
+            translationProvider: 'grok',
+            grokApiKey: 'grok-key',
+        });
+
+        context.fetch = async () => jsonResponse({
+            error: {
+                message: 'model not available for this account',
+            },
+        }, 403);
+
+        await context.loadProviderConfig();
+        const result = await context.translateWithGrok(['hei maailma'], 'EN-US');
+
+        assert.equal(result[0], false);
+        assert.match(result[1], /Grok access denied/i);
+        assert.match(result[1], /model not available for this account/i);
+        assert.doesNotMatch(result[1], /Grok error: 403/i);
+    });
 });

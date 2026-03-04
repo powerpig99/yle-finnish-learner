@@ -92,6 +92,36 @@ describe('translation queue non-translatable subtitle handling', () => {
         assert.equal(context.hasTranslatableSubtitleContent(context.normalizeSubtitleText('こんにちは')), true);
     });
 
+    test('shouldLogTranslationFailureAsWarning classifies provider/config errors as warnings', () => {
+        const { context } = buildTranslationQueueHarness();
+
+        assert.equal(
+            context.shouldLogTranslationFailureAsWarning('Grok access denied (check API key permissions and model access)'),
+            true
+        );
+        assert.equal(
+            context.shouldLogTranslationFailureAsWarning('Gemini rate limit exceeded'),
+            true
+        );
+        assert.equal(
+            context.shouldLogTranslationFailureAsWarning('Google Cloud error: 403'),
+            true
+        );
+    });
+
+    test('shouldLogTranslationFailureAsWarning keeps unexpected/system errors as errors', () => {
+        const { context } = buildTranslationQueueHarness();
+
+        assert.equal(
+            context.shouldLogTranslationFailureAsWarning('TypeError: Cannot read properties of undefined'),
+            false
+        );
+        assert.equal(
+            context.shouldLogTranslationFailureAsWarning('Network request failed'),
+            false
+        );
+    });
+
     test('enqueueTranslation stores punctuation-only subtitles as pass-through success', () => {
         const { context, dispatchedEvents } = buildTranslationQueueHarness();
 

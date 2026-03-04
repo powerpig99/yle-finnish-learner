@@ -10,6 +10,19 @@ function hasTranslatableSubtitleContent(normalizedSubtitleText) {
     return /\p{L}/u.test(normalizedSubtitleText);
 }
 
+function shouldLogTranslationFailureAsWarning(errorMessage) {
+    const normalizedError = String(errorMessage || '').toLowerCase();
+    if (!normalizedError) {
+        return false;
+    }
+    return normalizedError.includes('api key') ||
+        normalizedError.includes('rate limit') ||
+        normalizedError.includes('access denied') ||
+        normalizedError.includes('quota') ||
+        normalizedError.includes('not configured') ||
+        /\berror:\s*4\d\d\b/.test(normalizedError);
+}
+
 function setPassThroughSubtitleState(normalizedText) {
     if (!normalizedText) {
         return false;
@@ -146,7 +159,10 @@ class TranslationQueue {
                     }
                     else {
                         const translationErrorMessage = translationResponse;
-                        console.error("YleDualSubExtension: JIT translation error:", translationErrorMessage);
+                        const logTranslationError = shouldLogTranslationFailureAsWarning(translationErrorMessage)
+                            ? console.warn
+                            : console.error;
+                        logTranslationError("YleDualSubExtension: JIT translation error:", translationErrorMessage);
                         for (const rawSubtitleText of toProcessItems) {
                             markTranslationFailed(rawSubtitleText, translationErrorMessage);
                         }
@@ -457,7 +473,10 @@ async function handleBatchTranslation(subtitles) {
                     }
                 }
                 else {
-                    console.error("YleDualSubExtension: Batch translation error:", translationResponse);
+                    const logBatchError = shouldLogTranslationFailureAsWarning(translationResponse)
+                        ? console.warn
+                        : console.error;
+                    logBatchError("YleDualSubExtension: Batch translation error:", translationResponse);
                     for (const rawSubtitleText of texts) {
                         markTranslationFailed(rawSubtitleText, translationResponse);
                     }
