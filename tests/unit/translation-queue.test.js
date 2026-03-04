@@ -163,6 +163,38 @@ describe('translation queue non-translatable subtitle handling', () => {
         assert.ok(entry.nextRetryAt > Date.now());
     });
 
+    test('markTranslationSuccess marks tag-wrapped source echo as echo-back failure', () => {
+        const { context } = buildTranslationQueueHarness();
+        const key = toTranslationKey('Hei maailma');
+        context.detectedSourceLanguage = 'fi';
+        context.targetLanguage = 'EN-US';
+        context.subtitleState.set(key, { status: 'pending', updatedAt: Date.now() });
+
+        const updated = context.markTranslationSuccess('Hei maailma', 'Put <query>Hei maailma</query>');
+
+        assert.equal(updated, true);
+        const entry = context.subtitleState.get(key);
+        assert.equal(entry?.status, 'failed');
+        assert.match(entry?.error || '', /Translation echoed original text/);
+        assert.equal(typeof entry?.nextRetryAt, 'number');
+        assert.ok(Number.isFinite(entry?.nextRetryAt));
+    });
+
+    test('markTranslationSuccess keeps non-echo tagged translations', () => {
+        const { context } = buildTranslationQueueHarness();
+        const key = toTranslationKey('Hei maailma');
+        context.detectedSourceLanguage = 'fi';
+        context.targetLanguage = 'EN-US';
+        context.subtitleState.set(key, { status: 'pending', updatedAt: Date.now() });
+
+        const updated = context.markTranslationSuccess('Hei maailma', 'Hello <br> world');
+
+        assert.equal(updated, true);
+        const entry = context.subtitleState.get(key);
+        assert.equal(entry?.status, 'success');
+        assert.equal(entry?.text, 'Hello <br> world');
+    });
+
     test('markTranslationSuccess allows identical text when source and target language match', () => {
         const { context } = buildTranslationQueueHarness();
         const key = toTranslationKey('Hei maailma');

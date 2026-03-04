@@ -217,6 +217,41 @@ function isSourceAndTargetSameLanguage() {
     return normalizeLanguageCode(detectedSourceLanguage) === normalizeLanguageCode(targetLanguage);
 }
 
+function stripXmlLikeTags(text) {
+    return String(text || '')
+        .replace(/<[^>]+>/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+}
+
+function isLikelyWrappedEchoBackTranslation(originalText, translatedText) {
+    if (!/<[^>]+>/.test(String(translatedText || ''))) {
+        return false;
+    }
+    const normalizedOriginalKey = toTranslationKey(originalText);
+    if (!normalizedOriginalKey) {
+        return false;
+    }
+    const strippedTranslatedKey = toTranslationKey(stripXmlLikeTags(translatedText));
+    if (!strippedTranslatedKey) {
+        return false;
+    }
+    if (strippedTranslatedKey === normalizedOriginalKey) {
+        return true;
+    }
+    const sourceIndex = strippedTranslatedKey.indexOf(normalizedOriginalKey);
+    if (sourceIndex === -1) {
+        return false;
+    }
+    const prefix = strippedTranslatedKey.slice(0, sourceIndex).trim();
+    const suffix = strippedTranslatedKey
+        .slice(sourceIndex + normalizedOriginalKey.length)
+        .trim();
+    const prefixWords = prefix ? prefix.split(/\s+/).length : 0;
+    const suffixWords = suffix ? suffix.split(/\s+/).length : 0;
+    return prefixWords + suffixWords <= 3;
+}
+
 function dispatchTranslationResolved(key) {
     document.dispatchEvent(new CustomEvent('dscTranslationResolved', { detail: { key } }));
 }
@@ -245,9 +280,11 @@ function markTranslationSuccess(rawSubtitleText, translatedText) {
         return false;
     }
     const normalizedTranslatedText = normalizeSubtitleText(translatedText);
+    const isDirectEchoBack = toTranslationKey(normalizedTranslatedText) === toTranslationKey(normalizedOriginalText);
+    const isWrappedEchoBack = isLikelyWrappedEchoBackTranslation(normalizedOriginalText, normalizedTranslatedText);
     if (hasTranslatableSubtitleContent(normalizedOriginalText) &&
         !isSourceAndTargetSameLanguage() &&
-        normalizedTranslatedText === normalizedOriginalText) {
+        (isDirectEchoBack || isWrappedEchoBack)) {
         return markTranslationFailed(rawSubtitleText, 'Translation echoed original text', {
             isEchoBack: true,
         });

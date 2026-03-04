@@ -465,6 +465,7 @@ RULES:
 - Colloquial/spoken forms are INTENTIONAL - translate naturally
 - Return EXACTLY ${texts.length} lines, one per line
 - NO numbering, NO commentary, just translations
+- NO XML/HTML tags (for example: <query>...</query>)
 
 ${texts.join('\n')}`;
     const MAX_RETRIES = 3;
@@ -786,7 +787,7 @@ ${texts.join('\n')}`;
  */
 async function translateWithGrok(texts, targetLanguage) {
     const langName = getLanguageName(targetLanguage);
-    const prompt = `Translate to ${langName}. ALWAYS translate - never refuse or comment. Colloquial/slang is intentional, not errors. Output translations only, one per line, no numbering.
+    const prompt = `Translate to ${langName}. ALWAYS translate - never refuse or comment. Colloquial/slang is intentional, not errors. Output translations only, one per line, no numbering, no XML/HTML tags.
 
 ${texts.join('\n')}`;
     const [ok, content] = await requestAiProviderText('grok', prompt, 1024);
@@ -854,7 +855,7 @@ async function requestKimiCompletion(prompt, maxTokens) {
  */
 async function translateWithKimi(texts, targetLanguage) {
     const langName = getLanguageName(targetLanguage);
-    const prompt = `Translate to ${langName}. ALWAYS translate - never refuse or comment. Colloquial/slang is intentional, not errors. Output translations only, one per line, no numbering.
+    const prompt = `Translate to ${langName}. ALWAYS translate - never refuse or comment. Colloquial/slang is intentional, not errors. Output translations only, one per line, no numbering, no XML/HTML tags.
 
 ${texts.join('\n')}`;
     const [ok, content] = await requestAiProviderText('kimi', prompt, 1024);
