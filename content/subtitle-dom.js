@@ -296,7 +296,6 @@ function addContentToDisplayedSubtitlesWrapper(displayedSubtitlesWrapper, origin
         const hasTranslatableContent = hasTranslatableSubtitleContent(finnishText);
         let targetLanguageText = "Translating...";
         let shouldTrackPendingSpan = false;
-        let shouldStartQueueProcessing = false;
         let failedEntryForFallback = null;
         if (!hasTranslatableContent) {
             targetLanguageText = finnishText;
@@ -306,23 +305,14 @@ function addContentToDisplayedSubtitlesWrapper(displayedSubtitlesWrapper, origin
             targetLanguageText = stateEntry.text;
         }
         else if (stateEntry?.status === 'failed') {
-            const canRetry = typeof stateEntry.nextRetryAt !== 'number' || stateEntry.nextRetryAt <= Date.now();
-            if (canRetry && enqueueTranslation(finnishText)) {
-                shouldTrackPendingSpan = true;
-                shouldStartQueueProcessing = true;
-            }
-            else {
-                targetLanguageText = finnishText;
-                failedEntryForFallback = stateEntry;
-            }
+            targetLanguageText = finnishText;
+            failedEntryForFallback = stateEntry;
         }
         else if (stateEntry?.status === 'pending') {
             shouldTrackPendingSpan = true;
-            shouldStartQueueProcessing = true;
         }
-        else if (enqueueTranslation(finnishText)) {
+        else {
             shouldTrackPendingSpan = true;
-            shouldStartQueueProcessing = true;
         }
         const targetLanguageSpan = createSubtitleSpan(targetLanguageText, `${spanClassName} translated-text-span`);
         targetLanguageSpan.dataset.originalText = finnishText;
@@ -334,9 +324,6 @@ function addContentToDisplayedSubtitlesWrapper(displayedSubtitlesWrapper, origin
             trackActiveTranslationSpan(translationKey, targetLanguageSpan);
         }
         displayedSubtitlesWrapper.appendChild(targetLanguageSpan);
-        if (shouldStartQueueProcessing) {
-            translationQueue.processQueue().catch(console.error);
-        }
     }
 }
 /**

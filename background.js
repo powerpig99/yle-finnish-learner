@@ -73,16 +73,6 @@ chrome.storage.onChanged.addListener((changes, namespace) => {
 // MESSAGE HANDLING
 // ==================================
 chrome.runtime.onMessage.addListener((request, _sender, sendResponse) => {
-    if (request.action === 'fetchTranslation') {
-        const { rawSubtitleTexts, rawSubtitleFinnishTexts, targetLanguage } = request.data;
-        const textsToTranslate = Array.isArray(rawSubtitleTexts)
-            ? rawSubtitleTexts
-            : (Array.isArray(rawSubtitleFinnishTexts) ? rawSubtitleFinnishTexts : []);
-        translateTextsWithErrorHandling(textsToTranslate, targetLanguage)
-            .then(sendResponse)
-            .catch((error) => sendResponse([false, error.message || String(error)]));
-        return true;
-    }
     if (request.action === 'fetchBatchTranslation') {
         const { texts, targetLanguage, isContextual, sourceLanguage } = request.data;
         translateBatchWithContext(texts, targetLanguage, isContextual, sourceLanguage)

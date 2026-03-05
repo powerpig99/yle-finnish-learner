@@ -58,152 +58,6 @@ function setPassThroughSubtitleState(normalizedText) {
     dispatchTranslationResolved(key);
     return true;
 }
-
-class TranslationQueue {
-    constructor() {
-        /* Queue to manage translation requests to avoid hitting rate limits */
-        this.BATCH_MAXIMUM_SIZE = 7;
-        this.queue = [];
-        this.isProcessing = false;
-    }
-    /**
-     * @param {string} rawSubtitleText - Source subtitle text to translate
-     * @param {boolean} shouldQueue - Whether to add this text to the JIT queue.
-     * @param {number} generation - Translation session generation that owns this work.
-    * @returns {boolean} - True if subtitle moved to pending state
-     */
-    enqueue(rawSubtitleText, shouldQueue = true, generation = getCurrentTranslationSessionGeneration()) {
-        const normalizedText = normalizeSubtitleText(rawSubtitleText);
-        if (!normalizedText) {
-            return false;
-        }
-        if (!hasTranslatableSubtitleContent(normalizedText)) {
-            setPassThroughSubtitleState(normalizedText);
-            return false;
-        }
-        const key = toTranslationKey(normalizedText);
-        const currentEntry = subtitleState.get(key);
-        const now = Date.now();
-        const isSameGeneration = typeof currentEntry?.generation !== 'number' || currentEntry.generation === generation;
-        if ((currentEntry?.status === 'pending' && isSameGeneration) || currentEntry?.status === 'success') {
-            return false;
-        }
-        if (currentEntry?.status === 'failed' &&
-            isSameGeneration &&
-            typeof currentEntry.nextRetryAt === 'number' &&
-            currentEntry.nextRetryAt > now) {
-            return false;
-        }
-        subtitleState.set(key, {
-            status: 'pending',
-            generation,
-            updatedAt: now,
-        });
-        if (shouldQueue) {
-            this.queue.push({ text: normalizedText, generation });
-        }
-        return true;
-    }
-    clear() {
-        this.queue.length = 0;
-    }
-    /**
-     * Process the translation queue in batches
-     * By sending to background.js to handle translation and update subtitleState
-     * @returns {Promise<void>}
-     */
-    async processQueue() {
-        if (this.isProcessing || this.queue.length === 0 || !dualSubEnabled) {
-            return;
-        }
-        this.isProcessing = true;
-        try {
-            while (this.queue.length > 0 && dualSubEnabled) {
-                /** @type {Array<{text: string, generation: number}>} */
-                const toProcessItems = [];
-                for (let i = 0; i < Math.min(this.queue.length, this.BATCH_MAXIMUM_SIZE); i++) {
-                    const item = this.queue.shift();
-                    if (item) {
-                        toProcessItems.push(item);
-                    }
-                }
-                if (toProcessItems.length === 0) {
-                    continue;
-                }
-                if (!dualSubEnabled) {
-                    for (const item of toProcessItems) {
-                        // Guard for dualSubEnabled being false at dequeue time: resolve pending entries deterministically.
-                        markTranslationFailed(item.text, 'Dual subtitles disabled', 0, item.generation);
-                    }
-                    break;
-                }
-                try {
-                    const [isSucceeded, translationResponse] = await fetchTranslation(toProcessItems.map((item) => item.text));
-                    if (isSucceeded) {
-                        const translatedTexts = translationResponse;
-                        /**
-                         * @type {Array<SubtitleRecord>}
-                         */
-                        const toCacheSubtitleRecords = [];
-                        for (let i = 0; i < toProcessItems.length; i++) {
-                            const queuedItem = toProcessItems[i];
-                            const translatedText = translatedTexts[i];
-                            const rawSubtitleText = queuedItem.text;
-                            if (translatedText === null || translatedText === undefined) {
-                                markTranslationFailed(rawSubtitleText, 'Empty translation response', TRANSLATION_FAILURE_COOLDOWN_MS, queuedItem.generation);
-                                continue;
-                            }
-                            const translatedTextValue = normalizeSubtitleText(translatedText);
-                            if (!markTranslationSuccess(rawSubtitleText, translatedTextValue, queuedItem.generation)) {
-                                continue;
-                            }
-                            const resolvedEntry = subtitleState.get(toTranslationKey(rawSubtitleText));
-                            const textToCache = resolvedEntry?.status === 'success' && resolvedEntry.text
-                                ? resolvedEntry.text
-                                : translatedTextValue;
-                            if (currentMovieName) {
-                                toCacheSubtitleRecords.push({
-                                    "movieName": currentMovieName,
-                                    "originalLanguage": "FI",
-                                    targetLanguage,
-                                    "originalText": toTranslationKey(rawSubtitleText),
-                                    "translatedText": textToCache,
-                                });
-                            }
-                        }
-                        if (globalDatabaseInstance && toCacheSubtitleRecords.length > 0) {
-                            saveSubtitlesBatch(globalDatabaseInstance, toCacheSubtitleRecords)
-                                .catch((error) => {
-                                console.error("YleDualSubExtension: Error saving subtitles batch to cache:", error);
-                            });
-                        }
-                    }
-                    else {
-                        const translationErrorMessage = translationResponse;
-                        const logTranslationError = shouldLogTranslationFailureAsWarning(translationErrorMessage)
-                            ? console.warn
-                            : console.error;
-                        logTranslationError("YleDualSubExtension: JIT translation error:", translationErrorMessage);
-                        for (const item of toProcessItems) {
-                            markTranslationFailed(item.text, translationErrorMessage, TRANSLATION_FAILURE_COOLDOWN_MS, item.generation);
-                        }
-                    }
-                }
-                catch (error) {
-                    const errorMessage = error.message || String(error);
-                    console.error("YleDualSubExtension: System error when translating text:", error);
-                    for (const item of toProcessItems) {
-                        markTranslationFailed(item.text, errorMessage, TRANSLATION_FAILURE_COOLDOWN_MS, item.generation);
-                    }
-                }
-            }
-        }
-        finally {
-            this.isProcessing = false;
-        }
-    }
-}
-const translationQueue = new TranslationQueue();
 const TRANSLATION_FAILURE_COOLDOWN_MS = 30000;
 const ECHO_BACK_BASE_COOLDOWN_MS = 30000;
 const ECHO_BACK_MAX_COOLDOWN_MS = 5 * 60 * 1000;
@@ -293,14 +147,39 @@ function dispatchTranslationResolved(key) {
     document.dispatchEvent(new CustomEvent('dscTranslationResolved', { detail: { key } }));
 }
 /**
- * Enqueue subtitle translation request for both JIT and batch workflows.
+ * Mark subtitle translation as pending for the authoritative batch workflow.
  * @param {string} rawSubtitleText
- * @param {boolean} shouldQueue
  * @param {number} generation
  * @returns {boolean}
  */
-function enqueueTranslation(rawSubtitleText, shouldQueue = true, generation = getCurrentTranslationSessionGeneration()) {
-    return translationQueue.enqueue(rawSubtitleText, shouldQueue, generation);
+function enqueueTranslation(rawSubtitleText, generation = getCurrentTranslationSessionGeneration()) {
+    const normalizedText = normalizeSubtitleText(rawSubtitleText);
+    if (!normalizedText) {
+        return false;
+    }
+    if (!hasTranslatableSubtitleContent(normalizedText)) {
+        setPassThroughSubtitleState(normalizedText);
+        return false;
+    }
+    const key = toTranslationKey(normalizedText);
+    const currentEntry = subtitleState.get(key);
+    const now = Date.now();
+    const isSameGeneration = typeof currentEntry?.generation !== 'number' || currentEntry.generation === generation;
+    if ((currentEntry?.status === 'pending' && isSameGeneration) || currentEntry?.status === 'success') {
+        return false;
+    }
+    if (currentEntry?.status === 'failed' &&
+        isSameGeneration &&
+        typeof currentEntry.nextRetryAt === 'number' &&
+        currentEntry.nextRetryAt > now) {
+        return false;
+    }
+    subtitleState.set(key, {
+        status: 'pending',
+        generation,
+        updatedAt: now,
+    });
+    return true;
 }
 /**
  * Transition subtitle state from pending to success.
@@ -408,7 +287,6 @@ function markTranslationFailed(rawSubtitleText, errorMessage, cooldownOrOptions 
 function clearSubtitleTranslationState() {
     advanceTranslationSessionGeneration();
     subtitleState.clear();
-    translationQueue.clear();
     echoBackRetryCounts.clear();
     pendingBatchSubtitles.length = 0;
     batchTranslationProgress = { current: 0, total: 0 };
@@ -494,9 +372,7 @@ async function handleBatchTranslation(subtitles) {
                 continue;
             }
             const translationProvider = getCurrentTranslationProvider();
-            // enqueueTranslation(..., false) only writes pending state and dedupes.
-            // This batch loop is responsible for resolving each pending entry.
-            const toTranslateSubtitles = currentBatch.filter(sub => enqueueTranslation(sub.text, false, batchGeneration));
+            const toTranslateSubtitles = currentBatch.filter(sub => enqueueTranslation(sub.text, batchGeneration));
             if (toTranslateSubtitles.length === 0) {
                 continue;
             }

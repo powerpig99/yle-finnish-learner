@@ -50,18 +50,3 @@ async function fetchBatchTranslation(texts) {
         'batch translation request'
     );
 }
-/**
- *
- * @param {Array<string>} rawSubtitleTexts - Source subtitle texts to translate
- * @returns {Promise<[true, Array<string>]|[false, string]>} - Returns a tuple where the first element
- * indicates success and the second is either translated texts or an error message.
-
- */
-async function fetchTranslation(rawSubtitleTexts) {
-    return sendTranslationMessageWithRetry(
-        'fetchTranslation',
-        // Send both keys during transition to avoid any runtime version skew.
-        { rawSubtitleTexts, rawSubtitleFinnishTexts: rawSubtitleTexts, targetLanguage },
-        'message to background for translation'
-    );
-}

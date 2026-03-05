@@ -183,7 +183,6 @@ function renderCurrentSubtitleImmediately(originalSubtitlesWrapper) {
     if (originalSubtitleElements.length > 0) {
         addContentToDisplayedSubtitlesWrapper(displayedSubtitlesWrapper, originalSubtitleElements);
     }
-    translationQueue.processQueue().catch(console.error);
 }
 // SECTION: UNIFIED CONTROL PANEL EVENT LISTENERS
 // ==================================

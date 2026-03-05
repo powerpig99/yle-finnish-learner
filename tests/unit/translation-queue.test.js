@@ -40,7 +40,6 @@ function buildTranslationQueueHarness() {
         subtitleState: new Map(),
         toTranslationKey,
         dualSubEnabled: true,
-        fetchTranslation: async () => [true, []],
         fetchBatchTranslation: async () => [true, []],
         currentMovieName: null,
         targetLanguage: 'EN-US',
@@ -85,9 +84,7 @@ function buildTranslationQueueHarness() {
     const scriptSource = fs.readFileSync(scriptPath, 'utf8');
 
     vm.createContext(context);
-    vm.runInContext(`${scriptSource}
-globalThis.__testApi = { translationQueue };
-`, context, { filename: 'translation-queue.js' });
+    vm.runInContext(scriptSource, context, { filename: 'translation-queue.js' });
 
     return {
         context,
@@ -95,7 +92,6 @@ globalThis.__testApi = { translationQueue };
         setSubtitlesCalls,
         indicatorStats,
         saveCalls,
-        translationQueue: context.__testApi.translationQueue,
     };
 }
 
@@ -511,65 +507,4 @@ describe('translation queue non-translatable subtitle handling', () => {
         );
     });
 
-    test('navigation reset drops stale JIT work and prevents stale completions from resolving a new session', async () => {
-        const { context, saveCalls, translationQueue } = buildTranslationQueueHarness();
-        context.globalDatabaseInstance = { tag: 'db' };
-        context.currentMovieName = 'movie-a';
-        let resolveFirstFetch = null;
-        const fetchArgs = [];
-
-        context.fetchTranslation = async (texts) => {
-            fetchArgs.push([...texts]);
-            if (fetchArgs.length === 1) {
-                return await new Promise((resolve) => {
-                    resolveFirstFetch = () => resolve([true, texts.map((text) => `stale:${text}`)]);
-                });
-            }
-            return [true, texts.map((text) => `fresh:${text}`)];
-        };
-
-        assert.equal(context.enqueueTranslation('shared line'), true);
-        const firstProcessPromise = translationQueue.processQueue();
-
-        await Promise.resolve();
-
-        assert.equal(context.enqueueTranslation('old queued'), true);
-
-        context.resetNavigationSubtitleTimeline();
-        context.currentMovieName = 'movie-b';
-
-        assert.equal(context.enqueueTranslation('shared line'), true);
-        translationQueue.processQueue().catch(() => {});
-
-        assert.equal(typeof resolveFirstFetch, 'function');
-        resolveFirstFetch();
-        await firstProcessPromise;
-
-        for (let attempt = 0; attempt < 20; attempt++) {
-            const entry = context.subtitleState.get(toTranslationKey('shared line'));
-            if (entry?.status === 'success' && entry.text === 'fresh:shared line') {
-                break;
-            }
-            await new Promise((resolve) => setTimeout(resolve, 0));
-        }
-
-        const sharedEntry = context.subtitleState.get(toTranslationKey('shared line'));
-        const cachedRecords = saveCalls.flat();
-        assert.equal(fetchArgs.length, 2);
-        assert.deepEqual(fetchArgs[0], ['shared line']);
-        assert.deepEqual(fetchArgs[1], ['shared line']);
-        assert.equal(sharedEntry?.status, 'success');
-        assert.equal(sharedEntry?.text, 'fresh:shared line');
-        assert.equal(context.subtitleState.has(toTranslationKey('old queued')), false);
-        assert.equal(cachedRecords.some((record) => record.movieName === 'movie-a'), false);
-        assert.equal(cachedRecords.some((record) => record.originalText === toTranslationKey('old queued')), false);
-        assert.equal(
-            cachedRecords.some((record) =>
-                record.movieName === 'movie-b' &&
-                record.originalText === toTranslationKey('shared line') &&
-                record.translatedText === 'fresh:shared line'
-            ),
-            true
-        );
-    });
 });
