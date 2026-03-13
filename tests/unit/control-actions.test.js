@@ -57,7 +57,7 @@ function makeVideo({ currentTime = 0, paused = false, textTracks = [] } = {}) {
 }
 
 describe('ControlActions subtitle navigation', () => {
-    test('skipToNextSubtitle uses prefetched subtitle timing for long-gap jumps', () => {
+    test('skipToNextSubtitle prefers the exact next subtitle timing when it exists', () => {
         const video = makeVideo({
             currentTime: 11,
             textTracks: [],
@@ -111,8 +111,7 @@ describe('ControlActions subtitle navigation', () => {
         assert.equal(video.currentTime, 2);
     });
 
-    test('skipToNextSubtitle ignores the request when prefetched timings are unavailable', () => {
-        const primedEndTimes = [];
+    test('skipToNextSubtitle still moves forward 10 seconds when no subtitle target is available yet', () => {
         const video = makeVideo({
             currentTime: 10,
             textTracks: [
@@ -121,17 +120,14 @@ describe('ControlActions subtitle navigation', () => {
                     cues: [{ startTime: 5 }, { startTime: 12 }, { startTime: 20 }],
                 },
             ],
+            paused: true,
         });
-        const controlActions = buildControlActionsHarness(video, {
-            primeAutoPauseNavigationTarget: (endTime) => {
-                primedEndTimes.push(endTime);
-            },
-        });
+        const controlActions = buildControlActionsHarness(video);
 
         controlActions.skipToNextSubtitle([]);
 
-        assert.equal(video.currentTime, 10);
-        assert.deepEqual(primedEndTimes, []);
+        assert.equal(video.currentTime, 20);
+        assert.equal(video.playCalls, 1);
     });
 
     test('prefetched timings stay authoritative and ignore text-track cue timing', () => {
@@ -199,18 +195,13 @@ describe('ControlActions subtitle navigation', () => {
         assert.equal(video.currentTime, 5.0);
     });
 
-    test('skipToNextSubtitle is a no-op on the last subtitle', () => {
-        const primedEndTimes = [];
+    test('skipToNextSubtitle still moves forward 10 seconds after the last subtitle', () => {
         const video = makeVideo({
             currentTime: 50.5,
             paused: true,
             textTracks: [],
         });
-        const controlActions = buildControlActionsHarness(video, {
-            primeAutoPauseNavigationTarget: (endTime) => {
-                primedEndTimes.push(endTime);
-            },
-        });
+        const controlActions = buildControlActionsHarness(video);
 
         const didSeek = controlActions.skipToNextSubtitle([
             { startTime: 2, endTime: 3, text: 'one' },
@@ -218,10 +209,9 @@ describe('ControlActions subtitle navigation', () => {
             { startTime: 50, endTime: 52, text: 'three' },
         ]);
 
-        assert.equal(didSeek, false);
-        assert.equal(video.currentTime, 50.5);
-        assert.equal(video.playCalls, 0);
-        assert.deepEqual(primedEndTimes, []);
+        assert.equal(didSeek, true);
+        assert.equal(video.currentTime, 60.5);
+        assert.equal(video.playCalls, 1);
     });
 
     test('repeatCurrentSubtitle primes auto-pause with the repeated subtitle end time', () => {

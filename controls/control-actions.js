@@ -4,6 +4,8 @@
  * Action handlers for the YLE Areena control panel.
  */
 
+const NEXT_SUBTITLE_SKIP_AHEAD_SECONDS = 10;
+
 const ControlActions = {
   /**
    * Get the current video element
@@ -101,20 +103,36 @@ const ControlActions = {
     return currentSubIndex === -1 ? targets[0] : targets[currentSubIndex];
   },
 
-  seekToSubtitleTarget(video, target) {
-    if (!video || !target || typeof target.startTime !== 'number' || !Number.isFinite(target.startTime)) {
+  seekVideo(video, time, endTime = null) {
+    if (!video || typeof time !== 'number' || !Number.isFinite(time)) {
       return false;
     }
 
     if (typeof primeAutoPauseNavigationTarget === 'function') {
-      primeAutoPauseNavigationTarget(target.endTime);
+      primeAutoPauseNavigationTarget(endTime);
     }
 
-    video.currentTime = target.startTime;
+    video.currentTime = time;
     if (video.paused) {
       video.play();
     }
     return true;
+  },
+
+  seekToSubtitleTarget(video, target) {
+    if (!target || typeof target.startTime !== 'number' || !Number.isFinite(target.startTime)) {
+      return false;
+    }
+
+    return this.seekVideo(video, target.startTime, target.endTime);
+  },
+
+  seekAheadBySeconds(video, seconds) {
+    if (!video || typeof seconds !== 'number' || !Number.isFinite(seconds)) {
+      return false;
+    }
+
+    return this.seekVideo(video, video.currentTime + seconds, null);
   },
 
   /**
@@ -165,7 +183,7 @@ const ControlActions = {
   },
 
   /**
-   * Skip to the next subtitle
+   * Move forward to the next subtitle target when available, otherwise seek ahead.
    * @param {Array<{startTime: number}>} subtitles
    */
   skipToNextSubtitle(subtitles = []) {
@@ -176,7 +194,10 @@ const ControlActions = {
     const targets = this.getNavigationTargets(subtitles);
     const EPSILON = 0.001;
 
-    if (targets.length === 0) return false;
+    // "Next subtitle" is still a forward-seek action even when no precise subtitle target exists yet.
+    if (targets.length === 0) {
+      return this.seekAheadBySeconds(video, NEXT_SUBTITLE_SKIP_AHEAD_SECONDS);
+    }
 
     // Determine current subtitle by index first, then advance exactly one subtitle.
     let currentSubIndex = -1;
@@ -188,7 +209,7 @@ const ControlActions = {
     }
 
     if (currentSubIndex >= targets.length - 1) {
-      return false;
+      return this.seekAheadBySeconds(video, NEXT_SUBTITLE_SKIP_AHEAD_SECONDS);
     }
 
     if (currentSubIndex < 0) {

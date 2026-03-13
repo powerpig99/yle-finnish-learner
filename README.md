@@ -16,8 +16,8 @@ A Chrome extension for learning Finnish through YLE Areena (Finnish public broad
   - AI-powered contextual translation as fallback (Claude/Gemini/Grok)
   - "Ask AI" button for alternative translations
 - **Auto-Pause**: Automatically pause after each subtitle line (toggle with P key)
-- **Subtitle Navigation**: Skip to previous/next subtitle with `,` and `.` keys
-- **Repeat**: Replay current subtitle from the beginning (R key)
+- **Subtitle Navigation**: Skip to previous/next subtitle with `,` and `.` keys; `.` seeks 10 seconds ahead if no next subtitle is available yet
+- **Repeat / Re-translate**: Replay the current subtitle from the beginning with `R`, or force a fresh translation with `Shift+R`
 - **Playback Speed Control**: Adjust from 0.5x to 2x with `[` and `]` keys
 - **Audio Download**: Download speech audio with filler sounds removed (A key)
 - **Multiple Translation Providers**:
@@ -34,8 +34,9 @@ A Chrome extension for learning Finnish through YLE Areena (Finnish public broad
 |-----|--------|
 | `D` | Toggle dual subtitles |
 | `,` | Skip to previous subtitle |
-| `.` | Skip to next subtitle |
+| `.` | Skip to next subtitle, or seek ahead 10 seconds if none is available yet |
 | `R` | Repeat current subtitle |
+| `Shift+R` | Re-translate current subtitle |
 | `P` | Toggle auto-pause |
 | `[` | Decrease playback speed |
 | `]` | Increase playback speed |
@@ -168,11 +169,14 @@ Load the extension in developer mode and test on YLE Areena.
 
 ## Changelog
 
+### v6.2.1 (March 2026)
+- **New:** `Shift+R` now forces re-translation of the current subtitle without replaying audio
+- **Improved:** `.` now seeks 10 seconds ahead when no next subtitle timing is available yet
+
 ### v6.2.0 (March 2026)
 - **Fixed:** Dual subtitles now initialize reliably on first load without repeated page reloads
 - **Fixed:** Subtitle translation failures now log provider, failure type, and provider response details
 - **Improved:** Visible subtitle lines retry translation when cache is missing or a prefetch attempt failed
-- **Improved:** Pressing `R` repeats audio and retries the current failed subtitle translation
 
 ### v6.0.0 (February 2026)
 - **Changed:** Zero external dependencies — no build step, no npm packages, source JS loaded directly by Chrome

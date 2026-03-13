@@ -1,6 +1,10 @@
-rm -f yle-dual-sub-extension.zip
+VERSION="$(node -p "require('./manifest.json').version")"
+OUTPUT_FILE="yle-dual-sub-extension.zip"
+VERSIONED_FILE="yle-dual-sub-extension_${VERSION}.zip"
 
-zip -r yle-dual-sub-extension.zip \
+rm -f "$OUTPUT_FILE" "$VERSIONED_FILE"
+
+zip -r "$OUTPUT_FILE" \
   manifest.json \
   icons/icon.png \
   background.js \
@@ -32,3 +36,6 @@ zip -r yle-dual-sub-extension.zip \
   extension-options-page/options.css \
   extension-options-page/options.js \
   -x "*.map" "*.DS_Store" "__MACOSX/*" "* 2.*"
+
+cp "$OUTPUT_FILE" "$VERSIONED_FILE"
+echo "Created $OUTPUT_FILE and $VERSIONED_FILE"

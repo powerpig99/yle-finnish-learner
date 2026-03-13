@@ -20,7 +20,7 @@ Learn Finnish naturally by watching Finnish TV shows on YLE Areena with dual sub
 Key features:
 • Dual subtitles: Finnish plus your target language (20+ languages)
 • Click-to-translate: Click any Finnish word for instant translation (Wiktionary + AI fallback)
-• Playback controls: Skip subtitles (comma/period), repeat line (R), speed 0.5x–2x (brackets)
+• Playback controls: Skip subtitles (comma/period, with a 10-second forward fallback), repeat line (R), re-translate current line (Shift+R), speed 0.5x–2x (brackets)
 • Auto-pause: Pause after each subtitle line (P)
 • Audio download: Extract speech audio for offline practice (A)
 • Smart caching: Translations cached locally for fast replay
@@ -34,6 +34,7 @@ Keyboard shortcuts:
 • D: Toggle dual subtitles
 • P: Toggle auto-pause
 • R: Repeat current subtitle
+• Shift+R: Re-translate current subtitle
 • , / .: Previous/next subtitle
 • [ / ]: Decrease/increase speed
 • A: Download audio
@@ -47,11 +48,9 @@ How to use:
 Privacy:
 No analytics or tracking. Translation text and word lookups are sent directly from your browser to the provider you choose. API keys are stored locally in Chrome sync storage. No data is sent to developer servers.
 
-What's new in v6.2.0:
-• Dual subtitles now initialize reliably on first load without repeated page reloads
-• Subtitle translation failures now include provider, failure type, and provider response details
-• Visible subtitle lines retry translation when cache is missing or a prefetch attempt failed
-• Pressing R repeats audio and retries the current failed subtitle translation
+What's new in v6.2.1:
+• Shift+R now forces a fresh translation for the current subtitle without replaying audio
+• Pressing . now seeks 10 seconds ahead when the next subtitle is not available yet
 
 Note:
 Supports YLE Areena only.
