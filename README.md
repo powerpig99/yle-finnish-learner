@@ -10,7 +10,7 @@ A Chrome extension for learning Finnish through YLE Areena (Finnish public broad
 
 ## Features
 
-- **Dual Subtitles**: Original subtitles with translations in your target language displayed below
+- **Dual Subtitles**: Original subtitles with translations in your target language displayed below, anchored to the rendered video frame
 - **Popup Dictionary**: Click any word to see its translation
   - Wiktionary definitions when available
   - AI-powered contextual translation as fallback (Claude/Gemini/Grok)
@@ -25,7 +25,7 @@ A Chrome extension for learning Finnish through YLE Areena (Finnish public broad
   - DeepL (high quality, free API key available)
   - Claude, Gemini, Grok, Kimi (AI-powered with context)
 - **Smart Caching**: Translations cached locally for instant replay
-- **Clean Viewing Mode**: Controls and background shade hide during playback, subtitles drop to bottom for unobstructed viewing
+- **Clean Viewing Mode**: Controls and background shade hide during playback, subtitles stay attached to the rendered video bottom, and only lift when visible controls actually overlap
 - **Fullscreen Support**: All features work in fullscreen mode
 
 ## Keyboard Shortcuts
@@ -113,9 +113,10 @@ You can choose your translation engine in Settings. The default is free Google T
 ## How It Works
 
 1. Extension intercepts subtitle data from YLE Areena (WebVTT format)
-2. Original subtitles are displayed with translations below
-3. Clicking a word queries Wiktionary, then falls back to AI translation
-4. All translations are cached locally in IndexedDB
+2. Original subtitles are displayed with translations below, positioned against the rendered video frame rather than the player box
+3. Subtitle font size scales from the rendered video width, so letterboxed and height-constrained layouts stay proportional
+4. Clicking a word queries Wiktionary, then falls back to AI translation
+5. All translations are cached locally in IndexedDB
 
 ## Development
 
@@ -168,6 +169,12 @@ Load the extension in developer mode and test on YLE Areena.
 - Only sends data to your chosen translation provider
 
 ## Changelog
+
+### v6.2.2 (March 2026)
+- **Improved:** Dual subtitles now anchor to the rendered video frame instead of the player box
+- **Improved:** Subtitle font size now scales with rendered video width, including height-constrained letterboxed layouts
+- **Improved:** Visible controls only lift subtitles by the pixels that actually overlap the rendered picture
+- **Fixed:** Subtitle position no longer animates and drifts during window resize
 
 ### v6.2.1 (March 2026)
 - **New:** `Shift+R` now forces re-translation of the current subtitle without replaying audio

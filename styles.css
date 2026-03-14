@@ -242,7 +242,7 @@ div[class*="PlayerUI__UI"]:not(.yle-mouse-active) div[class*="BottomControlBar__
 #displayed-subtitles-wrapper {
   /* Force absolute bottom positioning */
   position: absolute !important;
-  bottom: 0 !important;
+  bottom: var(--dsc-rendered-video-bottom-offset, 0px) !important;
   left: 0 !important;
   right: 0 !important;
   width: 100% !important;
@@ -259,13 +259,6 @@ div[class*="PlayerUI__UI"]:not(.yle-mouse-active) div[class*="BottomControlBar__
   visibility: visible !important;
   height: auto !important;
   overflow: visible !important;
-  /* Smooth transition when controls show/hide */
-  transition: bottom 0.3s ease !important;
-}
-
-/* Raise subtitles when controls are visible to clear the control bar */
-div[class*="PlayerUI__UI"].yle-mouse-active #displayed-subtitles-wrapper {
-  bottom: 60px !important;
 }
 
 /* Font sizes are set dynamically via JavaScript based on user settings */

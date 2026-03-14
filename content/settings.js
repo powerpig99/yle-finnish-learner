@@ -108,15 +108,14 @@ function applyPlaybackSpeed() {
 let lastVideoElement = null;
 // Subtitle font size setting (small, medium, large, xlarge)
 let subtitleFontSize = "medium";
-// Font size scale factors using CSS cqw units (container query width percentage)
-// Using CSS clamp() with container queries for automatic scaling based on player size
-const FONT_SIZE_VW_MAP = {
-    small: { main: '1.8cqw', translated: '1.4cqw', minMain: 12, maxMain: 50, minTrans: 10, maxTrans: 38 },
-    medium: { main: '2.2cqw', translated: '1.7cqw', minMain: 14, maxMain: 60, minTrans: 11, maxTrans: 46 },
-    large: { main: '2.6cqw', translated: '2.0cqw', minMain: 16, maxMain: 72, minTrans: 12, maxTrans: 55 },
-    xlarge: { main: '3.0cqw', translated: '2.3cqw', minMain: 18, maxMain: 84, minTrans: 14, maxTrans: 64 },
-    xxlarge: { main: '3.4cqw', translated: '2.6cqw', minMain: 20, maxMain: 96, minTrans: 16, maxTrans: 72 },
-    huge: { main: '4.0cqw', translated: '3.0cqw', minMain: 24, maxMain: 120, minTrans: 18, maxTrans: 90 }
+// Font size scale factors based on rendered video width.
+const FONT_SIZE_SCALE_MAP = {
+    small: { mainScale: 0.018, translatedScale: 0.014, minMain: 12, maxMain: 50, minTrans: 10, maxTrans: 38 },
+    medium: { mainScale: 0.022, translatedScale: 0.017, minMain: 14, maxMain: 60, minTrans: 11, maxTrans: 46 },
+    large: { mainScale: 0.026, translatedScale: 0.020, minMain: 16, maxMain: 72, minTrans: 12, maxTrans: 55 },
+    xlarge: { mainScale: 0.030, translatedScale: 0.023, minMain: 18, maxMain: 84, minTrans: 14, maxTrans: 64 },
+    xxlarge: { mainScale: 0.034, translatedScale: 0.026, minMain: 20, maxMain: 96, minTrans: 16, maxTrans: 72 },
+    huge: { mainScale: 0.040, translatedScale: 0.030, minMain: 24, maxMain: 120, minTrans: 18, maxTrans: 90 }
 };
 // Load saved subtitle font size from chrome storage
 chrome.storage.sync.get(['subtitleFontSize'], (result) => {
@@ -128,7 +127,7 @@ chrome.storage.sync.get(['subtitleFontSize'], (result) => {
 });
 /**
  * Apply the current subtitle font size via CSS injection
- * Uses CSS clamp() with cqw units for automatic responsive scaling based on player size
+ * Uses CSS clamp() against the measured rendered video width.
  */
 function applySubtitleFontSize() {
     const styleId = 'yle-dual-sub-fontsize-style';
@@ -138,16 +137,14 @@ function applySubtitleFontSize() {
         styleEl.id = styleId;
         document.head.appendChild(styleEl);
     }
-    const sizes = FONT_SIZE_VW_MAP[subtitleFontSize] || FONT_SIZE_VW_MAP.medium;
-    // Use CSS clamp() for automatic responsive scaling
-    // clamp(min, preferred, max) - preferred uses cqw units which scale with container (player) width
+    const sizes = FONT_SIZE_SCALE_MAP[subtitleFontSize] || FONT_SIZE_SCALE_MAP.medium;
     styleEl.textContent = `
     #displayed-subtitles-wrapper span {
-      font-size: clamp(${sizes.minMain}px, ${sizes.main}, ${sizes.maxMain}px) !important;
+      font-size: clamp(${sizes.minMain}px, calc(var(--dsc-rendered-video-width, 0px) * ${sizes.mainScale}), ${sizes.maxMain}px) !important;
     }
     #displayed-subtitles-wrapper .translated-text-span,
     #displayed-subtitles-wrapper .dual-sub-translated {
-      font-size: clamp(${sizes.minTrans}px, ${sizes.translated}, ${sizes.maxTrans}px) !important;
+      font-size: clamp(${sizes.minTrans}px, calc(var(--dsc-rendered-video-width, 0px) * ${sizes.translatedScale}), ${sizes.maxTrans}px) !important;
     }
   `;
 }

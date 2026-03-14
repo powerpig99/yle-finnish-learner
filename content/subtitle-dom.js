@@ -163,6 +163,253 @@ function createSubtitleSpan(text, className) {
     span.textContent = text;
     return span;
 }
+const DISPLAYED_SUBTITLES_VIDEO_BOTTOM_OFFSET_PROPERTY = '--dsc-rendered-video-bottom-offset';
+const DISPLAYED_SUBTITLES_RENDERED_VIDEO_WIDTH_PROPERTY = '--dsc-rendered-video-width';
+const BOTTOM_CONTROLS_OVERLAY_SELECTORS = [
+    'div[class*="Timeline__TimelineContainer"]',
+    'div[class*="BottomControlBar__LeftControls"]',
+    'div[class*="BottomControlBar__RightControls"]',
+];
+function clearDisplayedSubtitlesWrapperBottomOffset(displayedSubtitlesWrapper) {
+    if (!displayedSubtitlesWrapper?.style) {
+        return;
+    }
+    displayedSubtitlesWrapper.style.removeProperty(DISPLAYED_SUBTITLES_VIDEO_BOTTOM_OFFSET_PROPERTY);
+}
+function clearDisplayedSubtitlesWrapperVideoWidth(displayedSubtitlesWrapper) {
+    if (!displayedSubtitlesWrapper?.style) {
+        return;
+    }
+    displayedSubtitlesWrapper.style.removeProperty(DISPLAYED_SUBTITLES_RENDERED_VIDEO_WIDTH_PROPERTY);
+}
+function parseObjectPositionOffset(token, freeSpace) {
+    const normalizedToken = String(token || '').trim().toLowerCase();
+    if (!normalizedToken) {
+        return null;
+    }
+    if (normalizedToken === 'top' || normalizedToken === 'left') {
+        return 0;
+    }
+    if (normalizedToken === 'center') {
+        return freeSpace / 2;
+    }
+    if (normalizedToken === 'bottom' || normalizedToken === 'right') {
+        return freeSpace;
+    }
+    if (normalizedToken.endsWith('%')) {
+        const percent = Number.parseFloat(normalizedToken.slice(0, -1));
+        return Number.isFinite(percent) ? (freeSpace * percent) / 100 : null;
+    }
+    if (normalizedToken.endsWith('px')) {
+        const pixels = Number.parseFloat(normalizedToken.slice(0, -2));
+        return Number.isFinite(pixels) ? pixels : null;
+    }
+    return null;
+}
+function getObjectPositionTokens(objectPosition) {
+    const tokens = String(objectPosition || '').trim().split(/\s+/).filter(Boolean);
+    if (tokens.length === 0) {
+        return ['50%', '50%'];
+    }
+    if (tokens.length === 1) {
+        const token = tokens[0].toLowerCase();
+        if (token === 'top' || token === 'bottom') {
+            return ['50%', token];
+        }
+        return [token, '50%'];
+    }
+    return [tokens[0], tokens[1]];
+}
+function getRenderedVideoDimensions(boxWidth, boxHeight, intrinsicWidth, intrinsicHeight, objectFit) {
+    if (!(boxWidth > 0) || !(boxHeight > 0) || !(intrinsicWidth > 0) || !(intrinsicHeight > 0)) {
+        return null;
+    }
+    if (objectFit === 'fill' || objectFit === 'cover') {
+        return { width: boxWidth, height: boxHeight };
+    }
+    if (objectFit === 'none') {
+        return { width: intrinsicWidth, height: intrinsicHeight };
+    }
+    const containScale = Math.min(boxWidth / intrinsicWidth, boxHeight / intrinsicHeight);
+    const containDimensions = {
+        width: intrinsicWidth * containScale,
+        height: intrinsicHeight * containScale,
+    };
+    if (objectFit === 'contain') {
+        return containDimensions;
+    }
+    if (objectFit === 'scale-down') {
+        if (intrinsicWidth <= boxWidth && intrinsicHeight <= boxHeight) {
+            return { width: intrinsicWidth, height: intrinsicHeight };
+        }
+        return containDimensions;
+    }
+    return null;
+}
+function getRenderedVideoBottomCoordinate(videoElement) {
+    if (!videoElement || typeof window === 'undefined' || typeof window.getComputedStyle !== 'function') {
+        return null;
+    }
+    const videoRect = videoElement.getBoundingClientRect?.();
+    if (!videoRect || !(videoRect.width > 0) || !(videoRect.height > 0)) {
+        return null;
+    }
+    const computedStyle = window.getComputedStyle(videoElement);
+    const objectFit = computedStyle.objectFit || 'fill';
+    const intrinsicWidth = typeof videoElement.videoWidth === 'number' ? videoElement.videoWidth : 0;
+    const intrinsicHeight = typeof videoElement.videoHeight === 'number' ? videoElement.videoHeight : 0;
+    if (!(intrinsicWidth > 0) || !(intrinsicHeight > 0)) {
+        return objectFit === 'contain' || objectFit === 'none' || objectFit === 'scale-down'
+            ? null
+            : videoRect.bottom;
+    }
+    const renderedDimensions = getRenderedVideoDimensions(
+        videoRect.width,
+        videoRect.height,
+        intrinsicWidth,
+        intrinsicHeight,
+        objectFit
+    );
+    if (!renderedDimensions) {
+        return null;
+    }
+    if (renderedDimensions.height >= videoRect.height) {
+        return videoRect.bottom;
+    }
+    const [, verticalPositionToken] = getObjectPositionTokens(computedStyle.objectPosition || '50% 50%');
+    const freeVerticalSpace = videoRect.height - renderedDimensions.height;
+    const verticalOffset = parseObjectPositionOffset(verticalPositionToken, freeVerticalSpace);
+    if (!Number.isFinite(verticalOffset)) {
+        return null;
+    }
+    return videoRect.top + verticalOffset + renderedDimensions.height;
+}
+function getRenderedVideoWidth(videoElement) {
+    if (!videoElement || typeof window === 'undefined' || typeof window.getComputedStyle !== 'function') {
+        return null;
+    }
+    const videoRect = videoElement.getBoundingClientRect?.();
+    if (!videoRect || !(videoRect.width > 0) || !(videoRect.height > 0)) {
+        return null;
+    }
+    const computedStyle = window.getComputedStyle(videoElement);
+    const objectFit = computedStyle.objectFit || 'fill';
+    const intrinsicWidth = typeof videoElement.videoWidth === 'number' ? videoElement.videoWidth : 0;
+    const intrinsicHeight = typeof videoElement.videoHeight === 'number' ? videoElement.videoHeight : 0;
+    if (!(intrinsicWidth > 0) || !(intrinsicHeight > 0)) {
+        return objectFit === 'contain' || objectFit === 'none' || objectFit === 'scale-down'
+            ? null
+            : videoRect.width;
+    }
+    const renderedDimensions = getRenderedVideoDimensions(
+        videoRect.width,
+        videoRect.height,
+        intrinsicWidth,
+        intrinsicHeight,
+        objectFit
+    );
+    return renderedDimensions ? renderedDimensions.width : null;
+}
+function getVisibleBottomControlsTopCoordinate(playerUI = typeof document !== 'undefined'
+    ? document.querySelector('[class*="PlayerUI__UI"]')
+    : null) {
+    if (!playerUI?.classList?.contains('yle-mouse-active') || typeof playerUI.querySelectorAll !== 'function') {
+        return null;
+    }
+    const controlElements = new Set();
+    for (const selector of BOTTOM_CONTROLS_OVERLAY_SELECTORS) {
+        const matches = playerUI.querySelectorAll(selector);
+        for (const match of matches) {
+            controlElements.add(match);
+        }
+    }
+    let controlsTop = null;
+    for (const element of controlElements) {
+        const rect = element?.getBoundingClientRect?.();
+        if (!rect || !(rect.width > 0) || !(rect.height > 0)) {
+            continue;
+        }
+        controlsTop = controlsTop === null ? rect.top : Math.min(controlsTop, rect.top);
+    }
+    return controlsTop;
+}
+function getDisplayedSubtitlesControlsOverlapOffset(videoElement = typeof document !== 'undefined'
+    ? document.querySelector('video')
+    : null, playerUI = typeof document !== 'undefined'
+    ? document.querySelector('[class*="PlayerUI__UI"]')
+    : null) {
+    const renderedVideoBottom = getRenderedVideoBottomCoordinate(videoElement);
+    const controlsTop = getVisibleBottomControlsTopCoordinate(playerUI);
+    if (!Number.isFinite(renderedVideoBottom) || !Number.isFinite(controlsTop)) {
+        return 0;
+    }
+    return Math.max(0, renderedVideoBottom - controlsTop);
+}
+function getDisplayedSubtitlesBottomOffset(displayedSubtitlesWrapper, videoElement = typeof document !== 'undefined'
+    ? document.querySelector('video')
+    : null, playerUI = typeof document !== 'undefined'
+    ? document.querySelector('[class*="PlayerUI__UI"]')
+    : null) {
+    if (!displayedSubtitlesWrapper || !videoElement) {
+        return null;
+    }
+    const containingRect = displayedSubtitlesWrapper.offsetParent?.getBoundingClientRect?.();
+    const renderedVideoBottom = getRenderedVideoBottomCoordinate(videoElement);
+    if (!containingRect || !Number.isFinite(renderedVideoBottom)) {
+        return null;
+    }
+    const renderedVideoBottomOffset = Math.max(0, containingRect.bottom - renderedVideoBottom);
+    const controlsOverlapOffset = getDisplayedSubtitlesControlsOverlapOffset(videoElement, playerUI);
+    return renderedVideoBottomOffset + controlsOverlapOffset;
+}
+function syncDisplayedSubtitlesWrapperBottomOffset(displayedSubtitlesWrapper = typeof document !== 'undefined'
+    ? document.getElementById("displayed-subtitles-wrapper")
+    : null, videoElement = typeof document !== 'undefined'
+    ? document.querySelector('video')
+    : null, playerUI = typeof document !== 'undefined'
+    ? document.querySelector('[class*="PlayerUI__UI"]')
+    : null) {
+    if (!displayedSubtitlesWrapper?.style) {
+        return;
+    }
+    const bottomOffset = getDisplayedSubtitlesBottomOffset(displayedSubtitlesWrapper, videoElement, playerUI);
+    if (!Number.isFinite(bottomOffset)) {
+        clearDisplayedSubtitlesWrapperBottomOffset(displayedSubtitlesWrapper);
+        return;
+    }
+    displayedSubtitlesWrapper.style.setProperty(
+        DISPLAYED_SUBTITLES_VIDEO_BOTTOM_OFFSET_PROPERTY,
+        `${bottomOffset}px`
+    );
+}
+function syncDisplayedSubtitlesWrapperVideoWidth(displayedSubtitlesWrapper = typeof document !== 'undefined'
+    ? document.getElementById("displayed-subtitles-wrapper")
+    : null, videoElement = typeof document !== 'undefined'
+    ? document.querySelector('video')
+    : null) {
+    if (!displayedSubtitlesWrapper?.style) {
+        return;
+    }
+    const renderedVideoWidth = getRenderedVideoWidth(videoElement);
+    if (!Number.isFinite(renderedVideoWidth)) {
+        clearDisplayedSubtitlesWrapperVideoWidth(displayedSubtitlesWrapper);
+        return;
+    }
+    displayedSubtitlesWrapper.style.setProperty(
+        DISPLAYED_SUBTITLES_RENDERED_VIDEO_WIDTH_PROPERTY,
+        `${renderedVideoWidth}px`
+    );
+}
+function syncDisplayedSubtitlesWrapperVideoGeometry(displayedSubtitlesWrapper = typeof document !== 'undefined'
+    ? document.getElementById("displayed-subtitles-wrapper")
+    : null) {
+    const videoElement = typeof document !== 'undefined' ? document.querySelector('video') : null;
+    const playerUI = typeof document !== 'undefined'
+        ? document.querySelector('[class*="PlayerUI__UI"]')
+        : null;
+    syncDisplayedSubtitlesWrapperBottomOffset(displayedSubtitlesWrapper, videoElement, playerUI);
+    syncDisplayedSubtitlesWrapperVideoWidth(displayedSubtitlesWrapper, videoElement);
+}
 /**
  * Check if a mutation is related to subtitles wrapper
  * @param {MutationRecord} mutation
@@ -203,6 +450,7 @@ function createAndPositionDisplayedSubtitlesWrapper(originalSubtitlesWrapper) {
         displayedSubtitlesWrapper = copySubtitlesWrapper(originalSubtitlesWrapper.className);
         originalSubtitlesWrapper.parentNode?.insertBefore(displayedSubtitlesWrapper, originalSubtitlesWrapper.nextSibling);
     }
+    syncDisplayedSubtitlesWrapperVideoGeometry(displayedSubtitlesWrapper);
     return displayedSubtitlesWrapper;
 }
 /** @type {Map<string, Set<HTMLElement>>} */
@@ -354,11 +602,7 @@ function handleSubtitlesWrapperMutation(mutation) {
     const originalSubtitlesWrapper = getNativeSubtitlesWrapper() || mutation.target;
     originalSubtitlesWrapper.classList.add('dsc-original-hidden');
     const displayedSubtitlesWrapper = createAndPositionDisplayedSubtitlesWrapper(originalSubtitlesWrapper);
-    // Sync font-size from original wrapper (YLE sets it dynamically via inline style
-    // based on player size). Copy on every mutation to track player resizes.
-    if (originalSubtitlesWrapper.style.fontSize) {
-        displayedSubtitlesWrapper.style.fontSize = originalSubtitlesWrapper.style.fontSize;
-    }
+    syncDisplayedSubtitlesWrapperVideoGeometry(displayedSubtitlesWrapper);
     if (mutation.addedNodes.length > 0) {
         const finnishTextElements = getSubtitleTextElements(originalSubtitlesWrapper);
         // Get the current Finnish text
@@ -395,6 +639,9 @@ function triggerVideoLifecycleInitialization() {
     if (typeof setupVideoSpeedControl === 'function') {
         setupVideoSpeedControl();
     }
+    _trackedVideoElement?.addEventListener('loadedmetadata', () => {
+        syncDisplayedSubtitlesWrapperVideoGeometry();
+    });
     if (typeof loadMovieCacheAndUpdateMetadata === 'function') {
         loadMovieCacheAndUpdateMetadata().catch((error) => {
             console.error("YleDualSubExtension: Error populating shared translation map from cache:", error);
@@ -513,3 +760,14 @@ if (existingVideo && existingVideo !== _trackedVideoElement) {
     _trackedVideoElement = existingVideo;
     triggerVideoLifecycleInitialization();
 }
+if (typeof window !== 'undefined') {
+    window.addEventListener('resize', () => {
+        syncDisplayedSubtitlesWrapperVideoGeometry();
+    }, { passive: true });
+}
+document.addEventListener('dscYleControlsVisibilityChanged', () => {
+    syncDisplayedSubtitlesWrapperVideoGeometry();
+});
+document.addEventListener('fullscreenchange', () => {
+    syncDisplayedSubtitlesWrapperVideoGeometry();
+});

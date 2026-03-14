@@ -12,19 +12,34 @@ const MOUSE_HIDE_DELAY = 2500; // Hide after 2.5 seconds of inactivity
 function getPlayerUI() {
     return document.querySelector('[class*="PlayerUI__UI"]');
 }
+function notifyYleControlsVisibilityChanged(visible) {
+    document.dispatchEvent(new CustomEvent('dscYleControlsVisibilityChanged', {
+        detail: { visible },
+    }));
+}
 function showYleControls() {
     const playerUI = getPlayerUI();
+    const wasVisible = playerUI?.classList.contains('yle-mouse-active')
+        || document.body?.classList.contains('yle-mouse-active');
     if (playerUI) {
         playerUI.classList.add('yle-mouse-active');
     }
     document.body.classList.add('yle-mouse-active');
+    if (!wasVisible) {
+        notifyYleControlsVisibilityChanged(true);
+    }
 }
 function hideYleControls() {
     const playerUI = getPlayerUI();
+    const wasVisible = playerUI?.classList.contains('yle-mouse-active')
+        || document.body?.classList.contains('yle-mouse-active');
     if (playerUI) {
         playerUI.classList.remove('yle-mouse-active');
     }
     document.body.classList.remove('yle-mouse-active');
+    if (wasVisible) {
+        notifyYleControlsVisibilityChanged(false);
+    }
 }
 function showCursor() {
     const playerUI = getPlayerUI();
