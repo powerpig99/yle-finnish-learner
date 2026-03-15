@@ -10,6 +10,7 @@ const { describe, test } = require('node:test');
 
 function buildControlActionsHarness(video, {
     primeAutoPauseNavigationTarget = null,
+    clearAutoPause = null,
     dispatchEvent = null,
 } = {}) {
     const context = {
@@ -32,6 +33,9 @@ function buildControlActionsHarness(video, {
     };
     if (typeof primeAutoPauseNavigationTarget === 'function') {
         context.primeAutoPauseNavigationTarget = primeAutoPauseNavigationTarget;
+    }
+    if (typeof clearAutoPause === 'function') {
+        context.clearAutoPause = clearAutoPause;
     }
 
     const scriptPath = path.resolve(__dirname, '../../controls/control-actions.js');
@@ -91,6 +95,32 @@ describe('ControlActions subtitle navigation', () => {
         ]);
 
         assert.deepEqual(primedEndTimes, [37]);
+        assert.equal(video.currentTime, 35);
+        assert.equal(video.playCalls, 1);
+    });
+
+    test('skipToNextSubtitle clears any stale auto-pause before seeking', () => {
+        const callOrder = [];
+        const video = makeVideo({
+            currentTime: 11,
+            paused: true,
+            textTracks: [],
+        });
+        const controlActions = buildControlActionsHarness(video, {
+            clearAutoPause: () => {
+                callOrder.push('clear');
+            },
+            primeAutoPauseNavigationTarget: (endTime) => {
+                callOrder.push(`prime:${endTime}`);
+            },
+        });
+
+        controlActions.skipToNextSubtitle([
+            { startTime: 2, endTime: 3, text: 'one' },
+            { startTime: 35, endTime: 37, text: 'two' },
+        ]);
+
+        assert.deepEqual(callOrder, ['clear', 'prime:37']);
         assert.equal(video.currentTime, 35);
         assert.equal(video.playCalls, 1);
     });

@@ -108,6 +108,10 @@ const ControlActions = {
       return false;
     }
 
+    if (typeof clearAutoPause === 'function') {
+      clearAutoPause();
+    }
+
     if (typeof primeAutoPauseNavigationTarget === 'function') {
       primeAutoPauseNavigationTarget(endTime);
     }
