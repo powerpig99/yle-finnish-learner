@@ -1,10 +1,13 @@
 name: Build and Release Extension
 
 on:
+  push:
+    tags:
+      - 'v*'
   workflow_dispatch:
     inputs:
-      version:
-        description: 'Release version (e.g., 6.0.0)'
+      tag:
+        description: 'Release tag (e.g., v6.2.2)'
         required: true
         type: string
 
@@ -16,16 +19,38 @@ jobs:
       contents: write
 
     steps:
+      - name: Resolve release metadata
+        run: |
+          if [ "${{ github.event_name }}" = "push" ]; then
+            TAG="${{ github.ref_name }}"
+          else
+            TAG="${{ inputs.tag }}"
+          fi
+
+          VERSION="${TAG#v}"
+
+          echo "RELEASE_TAG=$TAG" >> "$GITHUB_ENV"
+          echo "RELEASE_VERSION=$VERSION" >> "$GITHUB_ENV"
+
       - name: Checkout code
         uses: actions/checkout@v4
         with:
-          ref: master
+          ref: ${{ env.RELEASE_TAG }}
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '22'
           cache: 'npm'
+
+      - name: Verify manifest version matches tag
+        run: |
+          MANIFEST_VERSION="$(node -p "require('./manifest.json').version")"
+
+          if [ "$MANIFEST_VERSION" != "$RELEASE_VERSION" ]; then
+            echo "Tag version $RELEASE_VERSION does not match manifest version $MANIFEST_VERSION" >&2
+            exit 1
+          fi
 
       - name: Run tests
         run: npm test
@@ -34,11 +59,10 @@ jobs:
         run: |
           chmod +x package_project.sh
           ./package_project.sh
-          mv yle-dual-sub-extension.zip yle-dual-sub-extension_${{ inputs.version }}.zip
 
       - name: Create release and upload zip
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v${{ inputs.version }}
-          name: Release ${{ inputs.version }}
-          files: yle-dual-sub-extension_${{ inputs.version }}.zip
+          tag_name: ${{ env.RELEASE_TAG }}
+          name: Release ${{ env.RELEASE_VERSION }}
+          files: yle-dual-sub-extension_${{ env.RELEASE_VERSION }}.zip
