@@ -1,20 +1,7 @@
-# Chrome Web Store Listing - YLE Finnish Learner
-
-## Basic Info
-
-**Extension Name:** YLE Finnish Learner
-
-**Short Description (132 chars max):**
+Short description
 Learn Finnish on YLE Areena with dual subtitles, word lookup, and playback controls for repeated listening practice.
 
-**Category:** Education
-
-**Language:** English
-
----
-
-## Detailed Description
-
+Detailed description
 Learn Finnish naturally by watching Finnish TV shows on YLE Areena with dual subtitles and interactive study tools.
 
 Key features:
@@ -74,40 +61,3 @@ What's new in v5.3.0:
 
 Note:
 Supports YLE Areena only.
-
----
-
-## Required Assets Checklist
-
-### Icons (you already have)
-- [x] 128x128 icon (icons/icon.png is 1024x1024, can be resized)
-
-### Screenshots Needed (1280x800 or 640x400)
-Take these manually in Chrome:
-
-1. **Dual Subtitles View** - Video playing with Finnish + translation visible
-2. **Word Popup Dictionary** - Click a word showing the translation popup
-3. **Control Panel** - Show the extension controls in the player
-4. **Settings Page** - The extension options page
-
-**Tip:** Use Chrome DevTools (F12) > Device Toolbar to set exact viewport size
-
-### Optional Promotional Images
-- 440x280 small promo tile
-- 920x680 large promo tile
-- 1400x560 marquee promo tile
-
----
-
-## Store Listing URL (after publishing)
-https://chromewebstore.google.com/detail/yle-finnish-learner/iiganofenpnkdhnmjjmfoilobopapmnj
-
----
-
-## Review Checklist
-
-Before submitting:
-- [ ] Test all features work on YLE Areena
-- [ ] Verify manifest.json has correct permissions
-- [ ] Check no console errors
-- [ ] Privacy policy URL (optional but recommended)

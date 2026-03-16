@@ -1,20 +1,21 @@
 # Chrome Web Store Publish Automation
 
 Date: 2026-03-13
-Status: Deferred
+Status: Closed
 
 ## Goal
 
-Automate Chrome Web Store upload and publish for tagged releases while keeping manual store publishing as the current path.
+Record the previously researched Chrome Web Store automation path and why it is not being pursued.
 
 ## Current Decision
 
-- Keep Chrome Web Store publishing manual for now.
-- Save the API-based path here so it can be implemented later without re-research.
+- Keep the existing Chrome Web Store listing as a stable store version.
+- Publish new releases on GitHub instead of pushing future versions to the Chrome Web Store.
+- Do not implement Chrome Web Store upload or publish automation unless the distribution strategy changes.
 
 ## Recommended Future Path
 
-Use the Chrome Web Store API v2 with a service account and extend the existing GitHub Actions release workflow.
+If Chrome Web Store publishing is resumed later, use the Chrome Web Store API v2 with a service account and extend the existing GitHub Actions release workflow.
 
 Authoritative release signal:
 - Push a git tag like `v6.2.1`

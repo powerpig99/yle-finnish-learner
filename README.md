@@ -45,9 +45,17 @@ A Chrome extension for learning Finnish through YLE Areena (Finnish public broad
 
 ## Installation
 
+### GitHub Releases
+
+[**Download the latest release from GitHub**](https://github.com/powerpig99/yle-finnish-learner/releases)
+
+GitHub releases are the authoritative distribution channel for new versions.
+
 ### Chrome Web Store
 
 [**Install from Chrome Web Store**](https://chromewebstore.google.com/detail/yle-finnish-learner/iiganofenpnkdhnmjjmfoilobopapmnj)
+
+The Chrome Web Store listing remains available as a stable store version, but new releases are published on GitHub.
 
 ### Manual Installation
 
@@ -175,6 +183,8 @@ Load the extension in developer mode and test on YLE Areena.
 - **Improved:** Subtitle font size now scales with rendered video width, including height-constrained letterboxed layouts
 - **Improved:** Visible controls only lift subtitles by the pixels that actually overlap the rendered picture
 - **Fixed:** Subtitle position no longer animates and drifts during window resize
+- **Fixed:** Subtitle skips now clear stale auto-pause timing before seeking
+- **New:** Added alternate controller hotkeys for 8BitDo Zero 2 in Mac keyboard mode
 
 ### v6.2.1 (March 2026)
 - **New:** `Shift+R` now forces re-translation of the current subtitle without replaying audio
