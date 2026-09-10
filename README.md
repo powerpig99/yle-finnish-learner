@@ -223,6 +223,10 @@ Load the extension in developer mode and test on YLE Areena.
 
 Contributions welcome! Please open issues for bugs or feature requests.
 
+## Philosophy & Context
+
+This project is a continuous living record and practical application of the first-person philosophy explored in [Not a ToE](https://powerpig99.github.io/not-a-toe/) — embodying the shift from analytical modeling to direct, active agency in everyday life.
+
 ## License
 
 [MIT License](LICENSE)
