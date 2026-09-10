@@ -225,7 +225,7 @@ Contributions welcome! Please open issues for bugs or feature requests.
 
 ## License
 
-[GPL v3](LICENSE) (GNU General Public License v3)
+[MIT License](LICENSE)
 
 ## Acknowledgments
 

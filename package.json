@@ -1,4 +1,7 @@
 {
+  "name": "yle-finnish-learner",
+  "version": "6.2.2",
+  "license": "MIT",
   "scripts": {
     "test": "node --test tests/unit/*.test.js",
     "test:watch": "node --test --watch tests/unit/*.test.js",
